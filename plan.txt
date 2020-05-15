@@ -1,0 +1,20 @@
+Project: notes
+
+Language: C
+
+Requirements:
+
+1. User will be able to select where all notes should be stored.
+
+2. Notes will be stored in a file.
+
+3. Each file will represent a category.
+
+4. Right now notes can only be added.
+
+5. Note format will be the following.
+    Number: 1
+    Date: Saturday, 2020-05-16 00:00
+    Note: Your note here
+
+6. If the user did not specify any category. The note will be written to the temp file.
