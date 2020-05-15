@@ -7,11 +7,15 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#define PATH_TO_CONFIG "/.config/notes/"
+#define CONFIG_FILENAME "config"
+
 // TODO Get the storage location
 
 void open_config(void);
-void create_config(char *filename);
+void create_config(char *dir_path, char *complete_path);
 void terminate(const char *fmt, ...);
+void print_storage(FILE *fp);
 
 int main(void) {
     open_config();
@@ -20,41 +24,57 @@ int main(void) {
 
 void open_config(void) {
     FILE *fp;
-    char *filename = "~/.config/notes/config";
-
-    fp = fopen(filename, "r");
-    if (fp == NULL) {
-        // file not found. Create it and add the default location
-        create_config(filename);
-    } else {
-        fclose(fp);
-    }
-}
-
-void create_config(char *filename) {
-    FILE *fp;
-    char *default_dir = "~/notes";
-    char *home_str;
-    char *complete_path;
-    char *config_path = "/.config/notes";
-    char *end_filename = "/config";
+    char *home_str, *dir_path, *complete_path;
 
     home_str = getenv("HOME");
 
-    complete_path = malloc(strlen(home_str) + strlen(config_path) + strlen(end_filename) + 1);
+    complete_path = malloc(strlen(home_str) + strlen(PATH_TO_CONFIG) + strlen(CONFIG_FILENAME) + 1);
     if (complete_path == NULL) {
-        terminate("%s", "malloc failed in create_config.\n");
+        terminate("%s", "malloc failed in open_config.\n");
     }
     strcpy(complete_path, home_str);
-    strcat(complete_path, config_path);
+    strcat(complete_path, PATH_TO_CONFIG);
+
+    dir_path = strdup(complete_path);
+    if (dir_path == NULL) {
+        terminate("%s", "strdup failed in open_config.\n");
+    }
+
+    strcat(complete_path, CONFIG_FILENAME);
+
+    fp = fopen(complete_path, "r");
+    if (fp == NULL) {
+        // file not found. Create it and add the default location
+        create_config(dir_path, complete_path);
+
+        fp = fopen(complete_path, "r");
+        if (fp == NULL) {
+            // second attempt failed
+            terminate("%s", "Config file could not be read after creating.\n");
+        }
+
+        printf("2nd attempt success\n");
+
+    } else {
+        printf("1st attempt success\n");
+    }
+
+    print_storage(fp);
+    fclose(fp);
+
+    free(dir_path);
+    free(complete_path);
+}
+
+void create_config(char *dir_path, char *complete_path) {
+    FILE *fp;
+    char *default_dir = "/notes";
 
     struct stat st = {0};
 
-    if (stat(complete_path, &st) == -1) {
-        mkdir(complete_path, 0700);
+    if (stat(dir_path, &st) == -1) {
+        mkdir(dir_path, 0700);
     }
-
-    strcat(complete_path, end_filename);
 
     fp = fopen(complete_path, "w");
     if (fp == NULL) {
@@ -65,7 +85,6 @@ void create_config(char *filename) {
     fprintf(fp, "%s", default_dir);
 
     fclose(fp);
-    free(complete_path);
 }
 
 void terminate(const char *fmt, ...) {
@@ -76,5 +95,16 @@ void terminate(const char *fmt, ...) {
     va_end(ap);
 
     exit(EXIT_FAILURE);
+}
+
+void print_storage(FILE *fp) {
+    int ch;
+
+    printf("printing file\n");
+
+    while ((ch = fgetc(fp)) != EOF)
+        putchar(ch);
+
+    printf("\n");
 }
 
