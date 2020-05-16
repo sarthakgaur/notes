@@ -25,7 +25,6 @@ void store_note(char *tmp_path, char *storage_path, char *filename);
 char *open_config(void);
 void create_config(char *home_str, char *dir_path, char *complete_path);
 void terminate(const char *fmt, ...);
-void print_storage(FILE *fp);
 char *build_storage(FILE *fp);
 char *get_storage_name(FILE *fp);
 
@@ -56,7 +55,7 @@ char *write_note(char *storage_path) {
         terminate("%s", "malloc failure in write_note.\n");
 
     strcpy(tmp_path, storage_path);
-    strcat(tmp_path, tmp_fn + 4);
+    strcat(tmp_path, tmp_fn + 5);
 
     command = malloc(strlen(editor) + 1 + strlen(storage_path) + strlen(tmp_fn) + 1);
     if (command == NULL)
@@ -143,16 +142,11 @@ char *open_config(void) {
             // second attempt failed
             terminate("%s", "Config file could not be read after creating.\n");
         }
+    } 
 
-        printf("2nd attempt success\n");
-    } else {
-        printf("1st attempt success\n");
-    }
-
-    print_storage(fp);
     storage_path = build_storage(fp);
-    fclose(fp);
 
+    fclose(fp);
     free(dir_path);
     free(complete_path);
 
@@ -181,21 +175,10 @@ void create_config(char *home_str, char *dir_path, char *complete_path) {
         terminate("%s", "Config file could not be created.\n");
 
     fprintf(fp, "%s", "# If you want to change the storage location, you can do it from here.\n");
-    fprintf(fp, "%s", storage_dir);
+    fprintf(fp, "%s\n", storage_dir);
 
     fclose(fp);
     free(storage_dir);
-}
-
-void print_storage(FILE *fp) {
-    int ch;
-
-    printf("printing file\n");
-
-    while ((ch = fgetc(fp)) != EOF)
-        putchar(ch);
-
-    printf("\n");
 }
 
 char *build_storage(FILE *fp) {
@@ -210,7 +193,6 @@ char *build_storage(FILE *fp) {
         if (mkdir(storage_folder_name, 0700) != 0)
             terminate("%s", "storage folder could not be created\n");
 
-    printf("%s", "storage folder created\n");
     return storage_folder_name;
 }
 
@@ -234,13 +216,16 @@ char *get_storage_name(FILE *fp) {
         if (skip_line && ch != '\n')
             continue;
 
-        if (ch == '#' || ch == '\n') {
+        if (ch == '#') {
             skip_line = true;
             continue;
         }
 
-        if (isspace(ch) && !reading_started)
+        if (!reading_started && isspace(ch))
             continue;
+
+        if (reading_started && ch == '\n')
+            break;
 
         if (i < size) {
             reading_started = true;
@@ -256,7 +241,6 @@ char *get_storage_name(FILE *fp) {
     }
 
     buffer[i] = '\0';
-    printf("storage name: %s\n", buffer);
 
     return buffer;
 }
