@@ -28,14 +28,10 @@ char *read_config(void) {
     if (tmp_str == NULL)
         terminate("%s", "environment variable HOME not available.\n");
 
-    home_str = malloc(strlen(tmp_str) + 1);
-    if (home_str == NULL)
-        terminate("%s", "malloc failed in open_config.\n");
+    home_str = malloc_wppr(strlen(tmp_str) + 1, __func__);
     strcpy(home_str, tmp_str);
 
-    config_fn = malloc(strlen(home_str) + strlen(PATH_TO_CONFIG) + strlen(CONFIG_FILENAME) + 1);
-    if (config_fn == NULL)
-        terminate("%s", "malloc failed in open_config.\n");
+    config_fn = malloc_wppr(strlen(home_str) + strlen(PATH_TO_CONFIG) + strlen(CONFIG_FILENAME) + 1, __func__);
     strcpy(config_fn, home_str);
     strcat(config_fn, PATH_TO_CONFIG);
 
@@ -68,9 +64,7 @@ static void create_config(char *home_str, char *dir_path, char *config_fn) {
     FILE *config_fp;
     char *storage_dir, *default_dir = "/notes/";
 
-    storage_dir = malloc(strlen(home_str) + strlen(default_dir) + 1);
-    if (storage_dir == NULL)
-        terminate("%s", "malloc failed in create_config.\n");
+    storage_dir = malloc_wppr(strlen(home_str) + strlen(default_dir) + 1, __func__);
     strcpy(storage_dir, home_str);
     strcat(storage_dir, default_dir);
 
@@ -112,9 +106,7 @@ static char *get_stgnm(FILE *config_fp) {
 
     fseek(config_fp, 0L, SEEK_SET);
 
-    buffer = malloc(size);
-    if (buffer == NULL)
-        terminate("%s", "malloc failed in get_storage_name.\n");
+    buffer = malloc_wppr(size, __func__);
 
     while ((ch = fgetc(config_fp)) != EOF) {
         if (skip_line && ch == '\n') {

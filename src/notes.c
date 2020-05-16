@@ -9,11 +9,13 @@
 
 #define SIZE_HUN 100
 
+// TODO Add comments to functions
 // TODO Get the storage location // Done
 // TODO Build the storage location // Done
-// TODO Add comments to functions
 // TODO Split the functions into files // Done
-// TODO Get editor name from environment
+// TODO Get editor name from environment // Done
+// TODO Add reading and editing options for notes.
+// TODO Add malloc wrapper function. // Done
 
 enum note_source {
     FROM_STDIN,
@@ -55,9 +57,7 @@ static struct write_info *write_note(char *storage_path) {
     char *tmp_fn, *tmpf_path, *command, *editor, *tmp_str;
     struct write_info *wi; 
 
-    wi = malloc(sizeof(struct write_info));
-    if (wi == NULL)
-        terminate("%s", "malloc failed in write_note.\n");
+    wi = malloc_wppr(sizeof(struct write_info), __func__);
 
     tmp_fn = tmpnam(NULL);
 
@@ -69,20 +69,14 @@ static struct write_info *write_note(char *storage_path) {
         return wi;
     }
 
-    editor = malloc(strlen(tmp_str) + 1);
-    if (editor == NULL)
-        terminate("%s", "malloc failed in write_note.\n");
+    editor = malloc_wppr(strlen(tmp_str) + 1, __func__);
     strcpy(editor, tmp_str);
 
-    tmpf_path = malloc(strlen(storage_path) + strlen(tmp_fn) + 1);
-    if (tmpf_path == NULL)
-        terminate("%s", "malloc failure in write_note.\n");
+    tmpf_path = malloc_wppr(strlen(storage_path) + strlen(tmp_fn) + 1, __func__);
     strcpy(tmpf_path, storage_path);
     strcat(tmpf_path, tmp_fn + 5);
 
-    command = malloc(strlen(editor) + strlen(storage_path) + strlen(tmp_fn) + 2);
-    if (command == NULL)
-        terminate("%s", "malloc failure in write_note.\n");
+    command = malloc_wppr(strlen(editor) + strlen(storage_path) + strlen(tmp_fn) + 2, __func__);
     strcpy(command, editor);
     strcat(command, " ");
     strcat(command, tmpf_path);
@@ -103,9 +97,7 @@ static char *read_stdin(void) {
     char *buffer;
     int ch, i = 0, size = SIZE_HUN;
 
-    buffer = malloc(size);
-    if (buffer == NULL)
-        terminate("%s", "malloc failed in read_stdout.\n");
+    buffer = malloc_wppr(size, __func__);
 
     printf("Write your note: ");
 
@@ -135,9 +127,7 @@ static void store_note(struct write_info *wi, char *storage_path, char *filename
     time_t current;
     struct tm *t;
 
-    notef_path = malloc(strlen(storage_path) + strlen(filename) + 1);
-    if (notef_path == NULL)
-        terminate("%s", "malloc failure in store_note.\n");
+    notef_path = malloc_wppr(strlen(storage_path) + strlen(filename) + 1, __func__);
     strcpy(notef_path, storage_path);
     strcat(notef_path, filename);
 

@@ -14,3 +14,11 @@ void terminate(const char *fmt, ...) {
     exit(EXIT_FAILURE);
 }
 
+void *malloc_wppr(int bytes, const char *func_name) {
+    void *ptr;
+    ptr = malloc(bytes);
+    if (ptr == NULL)
+        terminate("malloc failed in %s.\n", func_name);
+    return ptr;
+}
+
