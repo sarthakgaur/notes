@@ -8,14 +8,16 @@
 #include "utilities.h"
 
 #define SIZE_HUN 100
+#define TMP_NM_SLICE 5
 
-// TODO Add comments to functions
-// TODO Get the storage location // Done
-// TODO Build the storage location // Done
-// TODO Split the functions into files // Done
-// TODO Get editor name from environment // Done
-// TODO Add reading and editing options for notes.
+// TODO Add comments to functions.
+// TODO Get the storage location. // Done
+// TODO Build the storage location. // Done
+// TODO Split the functions into files. // Done
+// TODO Get editor name from environment. // Done
 // TODO Add malloc wrapper function. // Done
+// TODO Get rid of config files and use the environment for location. // Done
+// TODO Add reading and editing options for notes.
 
 enum note_source {
     FROM_STDIN,
@@ -74,7 +76,7 @@ static struct write_info *write_note(char *storage_path) {
 
     tmpf_path = malloc_wppr(strlen(storage_path) + strlen(tmp_fn) + 1, __func__);
     strcpy(tmpf_path, storage_path);
-    strcat(tmpf_path, tmp_fn + 5);
+    strcat(tmpf_path, tmp_fn + TMP_NM_SLICE);
 
     command = malloc_wppr(strlen(editor) + strlen(storage_path) + strlen(tmp_fn) + 2, __func__);
     strcpy(command, editor);
@@ -155,7 +157,7 @@ static void store_note(struct write_info *wi, char *storage_path, char *filename
             fputc(ch, write_file);
     }
 
-    fprintf(write_file, "\n\n");
+    fprintf(write_file, "\n");
 
     fclose(write_file);
     free(notef_path);
