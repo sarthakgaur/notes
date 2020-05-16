@@ -17,7 +17,13 @@
 // TODO Get editor name from environment. // Done
 // TODO Add malloc wrapper function. // Done
 // TODO Get rid of config files and use the environment for location. // Done
-// TODO Add reading and editing options for notes.
+// TODO Add reading and editing options for notes. // Done
+
+enum request {
+    WRITE_NOTE,
+    READ_TMP_FILE,
+    READ_SPECIFIED_FILE,
+};
 
 enum note_source {
     FROM_STDIN,
@@ -30,29 +36,88 @@ struct write_info {
     char *buffer;
 };
 
+static void controller(enum request req, char *filename);
+static void read_note(char *storage_path, char *filename);
 static struct write_info *write_note(char *storage_path);
 static char *read_stdin(void);
 static void store_note(struct write_info *wi, char *storage_path, char *filename);
 static void cleanup(struct write_info *wi, char *storage_path);
 
 int main(int argc, char *argv[]) {
-    char *storage_path, *filename = "temp.txt";
-    struct write_info *wi; 
+    char *filename = "temp.txt";
+    enum request req;
 
-    if (argc == 2)
-        filename = argv[1];
+    if (argc == 2) {
+        if (strcmp(argv[1], "-e") == 0) {
+            req = READ_TMP_FILE;
+        } else {
+            filename = argv[1];
+            req = WRITE_NOTE;
+        }
+    } else if (argc == 3 && strcmp(argv[1], "-e") == 0) {
+        req = READ_SPECIFIED_FILE;
+        filename = argv[2];
+    } else if (argc == 1) {
+        req = WRITE_NOTE;
+    } else
+        terminate("%s", "invalid command\n");
 
-    storage_path = read_config();
-    wi = write_note(storage_path);
-
-    if (wi->ns == FROM_STDIN)
-        wi->buffer = read_stdin();
-
-    store_note(wi, storage_path, filename);
-
-    cleanup(wi, storage_path);
+    controller(req, filename);
 
     return 0;
+}
+
+static void controller(enum request req, char *filename) {
+    char *storage_path;
+    struct write_info *wi; 
+
+    storage_path = read_config();
+
+    switch (req) {
+        case WRITE_NOTE:
+            wi = write_note(storage_path);
+            if (wi->ns == FROM_STDIN)
+                wi->buffer = read_stdin();
+            store_note(wi, storage_path, filename);
+            cleanup(wi, storage_path);
+            break;
+        case READ_TMP_FILE:
+        case READ_SPECIFIED_FILE:
+            read_note(storage_path, filename);
+            free(storage_path);
+            break;
+    }
+}
+
+static void read_note(char *storage_path, char *filename) {
+    FILE *note_fp;
+    char *editor, *command, *note_fn;
+    int ch;
+
+    note_fn = malloc_wppr(strlen(storage_path) + strlen(filename) + 1, __func__);
+    strcpy(note_fn, storage_path);
+    strcat(note_fn, filename);
+
+    editor = getenv("EDITOR");
+    if (editor == NULL) {
+        note_fp = fopen(note_fn, "r");
+        if (note_fp == NULL)
+            terminate("%s", "Error: not able to open note file for reading.\n");
+        while ((ch = fgetc(note_fp)) != EOF)
+            putchar(ch);
+        fclose(note_fp);
+    } else {
+        command = malloc_wppr(strlen(editor) + strlen(note_fn) + 2, __func__);
+        strcpy(command, editor);
+        strcat(command, " ");
+        strcat(command, note_fn);
+
+        system(command);
+
+        free(command);
+    }
+
+    free(note_fn);
 }
 
 static struct write_info *write_note(char *storage_path) {
