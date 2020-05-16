@@ -22,14 +22,20 @@ static char *get_stgnm(FILE *config_fp);
 
 char *read_config(void) {
     FILE *config_fp;
-    char *home_str, *dir_path, *config_fn, *storage_path;
+    char *home_str, *dir_path, *config_fn, *storage_path, *tmp_str;
 
-    home_str = getenv("HOME");
+    tmp_str = getenv("HOME");
+    if (tmp_str == NULL)
+        terminate("%s", "environment variable HOME not available.\n");
+
+    home_str = malloc(strlen(tmp_str) + 1);
+    if (home_str == NULL)
+        terminate("%s", "malloc failed in open_config.\n");
+    strcpy(home_str, tmp_str);
 
     config_fn = malloc(strlen(home_str) + strlen(PATH_TO_CONFIG) + strlen(CONFIG_FILENAME) + 1);
     if (config_fn == NULL)
         terminate("%s", "malloc failed in open_config.\n");
-
     strcpy(config_fn, home_str);
     strcat(config_fn, PATH_TO_CONFIG);
 
@@ -51,6 +57,7 @@ char *read_config(void) {
     storage_path = build_storage(config_fp);
 
     fclose(config_fp);
+    free(home_str);
     free(dir_path);
     free(config_fn);
 
