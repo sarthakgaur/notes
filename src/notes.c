@@ -4,6 +4,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <ctype.h>
+#include <time.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -18,21 +19,104 @@
 // TODO Build the storage location // Done
 // TODO Add comments to functions
 
-void open_config(void);
+char *write_note(char *storage_path);
+void store_note(char *tmp_path, char *storage_path, char *filename);
+
+char *open_config(void);
 void create_config(char *home_str, char *dir_path, char *complete_path);
 void terminate(const char *fmt, ...);
 void print_storage(FILE *fp);
-void build_storage(FILE *fp);
+char *build_storage(FILE *fp);
 char *get_storage_name(FILE *fp);
 
-int main(void) {
-    open_config();
+int main(int argc, char *argv[]) {
+    char *storage_path, *tmp_path;
+    char *filename = "temp.txt";
+
+    if (argc > 1)
+        filename = argv[1];
+
+    storage_path = open_config();
+    tmp_path = write_note(storage_path);
+    store_note(tmp_path, storage_path, filename);
+
+    free(storage_path);
+    free(tmp_path);
     return 0;
 }
 
-void open_config(void) {
+char *write_note(char *storage_path) {
+    char *tmp_fn, *tmp_path, *command;
+    char *editor = "vim";
+
+    tmp_fn = tmpnam(NULL);
+
+    tmp_path = malloc(strlen(storage_path) + strlen(tmp_fn) + 1);
+    if (tmp_path == NULL)
+        terminate("%s", "malloc failure in write_note.\n");
+
+    strcpy(tmp_path, storage_path);
+    strcat(tmp_path, tmp_fn + 4);
+
+    command = malloc(strlen(editor) + 1 + strlen(storage_path) + strlen(tmp_fn) + 1);
+    if (command == NULL)
+        terminate("%s", "malloc failure in write_note.\n");
+
+    strcpy(command, editor);
+    strcat(command, " ");
+    strcat(command, tmp_path);
+
+    system(command);
+
+    free(command);
+
+    return tmp_path;
+}
+
+void store_note(char *tmp_path, char *storage_path, char *filename) {
+    FILE *read_file, *write_file;
+    char *complete_path;
+    char date_buffer[100];
+    int ch;
+    time_t current;
+    struct tm *t;
+
+    read_file = fopen(tmp_path, "r");
+    if (read_file == NULL)
+        terminate("%s", "Error: not able to open temp file for reading.\n");
+
+    complete_path = malloc(strlen(storage_path) + strlen(filename) + 1);
+    if (complete_path == NULL)
+        terminate("%s", "malloc failure in store_note.\n");
+
+    strcpy(complete_path, storage_path);
+    strcat(complete_path, filename);
+
+    write_file = fopen(complete_path, "a");
+    if (write_file == NULL)
+        terminate("%s", "Error: not able to open temp file for reading.\n");
+
+    current = time(NULL);
+    t = localtime(&current);
+
+    strftime(date_buffer, sizeof(date_buffer), "%A, %F %H:%M", t);
+    fprintf(write_file, "%s\n", date_buffer);
+
+    while ((ch = fgetc(read_file)) != EOF)
+        fputc(ch, write_file);
+
+    fprintf(write_file, "\n\n");
+
+    remove(tmp_path);
+    fclose(read_file);
+    fclose(write_file);
+    free(complete_path);
+}
+
+char *open_config(void) {
     FILE *fp;
     char *home_str, *dir_path, *complete_path;
+    char *storage_path;
 
     home_str = getenv("HOME");
 
@@ -66,16 +150,18 @@ void open_config(void) {
     }
 
     print_storage(fp);
-    build_storage(fp);
+    storage_path = build_storage(fp);
     fclose(fp);
 
     free(dir_path);
     free(complete_path);
+
+    return storage_path;
 }
 
 void create_config(char *home_str, char *dir_path, char *complete_path) {
     FILE *fp;
-    char *default_dir = "/notes";
+    char *default_dir = "/notes/";
     char *storage_dir;
 
     storage_dir = malloc(strlen(home_str) + strlen(default_dir) + 1);
@@ -112,7 +198,7 @@ void print_storage(FILE *fp) {
     printf("\n");
 }
 
-void build_storage(FILE *fp) {
+char *build_storage(FILE *fp) {
     char *storage_folder_name;
 
     fseek(fp, 0L, SEEK_SET);
@@ -125,6 +211,7 @@ void build_storage(FILE *fp) {
             terminate("%s", "storage folder could not be created\n");
 
     printf("%s", "storage folder created\n");
+    return storage_folder_name;
 }
 
 char *get_storage_name(FILE *fp) {
