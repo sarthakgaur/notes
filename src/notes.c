@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <ctype.h>
 #include <time.h>
 
 #include "config.h"
@@ -18,6 +19,9 @@
 // TODO Add malloc wrapper function. // Done
 // TODO Get rid of config files and use the environment for location. // Done
 // TODO Add reading and editing options for notes. // Done
+// TODO If no note is added terminate the program. // Done
+// TODO Improve error messages.
+// TODO Add support to view files stored in the notes dir.
 
 enum request {
     WRITE_NOTE,
@@ -39,6 +43,7 @@ struct write_info {
 static void controller(enum request req, char *filename);
 static void read_note(char *storage_path, char *filename);
 static struct write_info *write_note(char *storage_path);
+static void check_write(struct write_info *wi);
 static char *read_stdin(void);
 static void store_note(struct write_info *wi, char *storage_path, char *filename);
 static void cleanup(struct write_info *wi, char *storage_path);
@@ -78,6 +83,7 @@ static void controller(enum request req, char *filename) {
             wi = write_note(storage_path);
             if (wi->ns == FROM_STDIN)
                 wi->buffer = read_stdin();
+            check_write(wi);
             store_note(wi, storage_path, filename);
             cleanup(wi, storage_path);
             break;
@@ -185,6 +191,35 @@ static char *read_stdin(void) {
     buffer[i] = '\0';
 
     return buffer;
+}
+
+static void check_write(struct write_info *wi) {
+    FILE *read_file;
+    int ch, i = 0;
+    bool write_valid = false;
+
+    if (wi->ns == FROM_FILE) {
+        read_file = fopen(wi->tmpf_path, "r");
+        if (read_file == NULL)
+            terminate("%s", "Error: not able to open temp file for reading.\n");
+
+        while ((ch = fgetc(read_file)) != EOF)
+            if (!isspace(ch)) {
+                write_valid = true;
+                break;
+            }
+
+        fclose(read_file);
+    } else {
+        while ((ch = wi->buffer[i++]) != '\0')
+            if (!isspace(ch)) {
+                write_valid = true;
+                break;
+            }
+    }
+
+    if (!write_valid)
+        terminate("%s", "Error: no note was written.\n");
 }
 
 static void store_note(struct write_info *wi, char *storage_path, char *filename) {
