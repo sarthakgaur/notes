@@ -14,7 +14,6 @@
 #define SIZE_HUN 100
 #define TMP_NM_SLICE 5
 
-// TODO Add comments to functions.
 // TODO Get the storage location. // Done
 // TODO Build the storage location. // Done
 // TODO Split the functions into files. // Done
@@ -26,7 +25,10 @@
 // TODO Temp file after check_write terminates are not deleted. Need fix. // Done
 // TODO Refactoring required so that only cleanup frees the resources. // Done
 // TODO Add support to view files stored in the notes dir. // Done
+// TODO Need to refactor the calls of free and cleanup. // Done
+// TODO Improve function signatures. // Done
 // TODO Improve error messages.
+// TODO Add comments to functions.
 
 enum request {
     WRITE_NOTE,
@@ -38,23 +40,26 @@ enum request {
 enum note_source {
     FROM_STDIN,
     FROM_FILE,
+    NO_SOURCE,
 };
 
-struct write_info {
+struct note {
     enum note_source ns;
+    bool write_error;
+    char *storage_path;
+    char *filename;
     char *tmpf_path;
     char *buffer;
-    bool write_error;
 };
 
 static void controller(enum request req, char *filename);
-static void read_note(char *storage_path, char *filename);
-static void list_notes_files(char *storage_path);
-static struct write_info *write_note(char *storage_path);
-static void check_write(struct write_info *wi);
+static void read_note(struct note *stn);
+static void list_notes_files(struct note *stn);
+static void write_note(struct note *stn);
+static void check_write(struct note *stn);
 static char *read_stdin(void);
-static void store_note(struct write_info *wi, char *storage_path, char *filename);
-static void cleanup(struct write_info *wi, char *storage_path);
+static void store_note(struct note *stn);
+static void cleanup(struct note *stn);
 
 int main(int argc, char *argv[]) {
     char *filename = "temp.txt";
@@ -75,7 +80,7 @@ int main(int argc, char *argv[]) {
     } else if (argc == 1) {
         req = WRITE_NOTE;
     } else
-        terminate("%s", "invalid command\n");
+        terminate("%s", "Invalid command\n");
 
     controller(req, filename);
 
@@ -83,43 +88,41 @@ int main(int argc, char *argv[]) {
 }
 
 static void controller(enum request req, char *filename) {
-    char *storage_path;
-    struct write_info *wi; 
+    struct note stn; 
 
-    storage_path = read_config();
+    stn.ns = NO_SOURCE;
+    stn.storage_path = read_config();
+    stn.filename = filename;
 
     switch (req) {
         case WRITE_NOTE:
-            wi = write_note(storage_path);
-            if (wi->ns == FROM_STDIN)
-                wi->buffer = read_stdin();
-            check_write(wi);
-
-            if (!wi->write_error)
-                store_note(wi, storage_path, filename);
-
-            cleanup(wi, storage_path);
+            write_note(&stn);
+            if (stn.ns == FROM_STDIN)
+                stn.buffer = read_stdin();
+            check_write(&stn);
+            if (!stn.write_error)
+                store_note(&stn);
             break;
         case READ_TMP_FILE:
         case READ_SPECIFIED_FILE:
-            read_note(storage_path, filename);
-            free(storage_path);
+            read_note(&stn);
             break;
         case LIST_NOTES_FILES:
-            list_notes_files(storage_path);
-            free(storage_path);
+            list_notes_files(&stn);
             break;
     }
+
+    cleanup(&stn);
 }
 
-static void read_note(char *storage_path, char *filename) {
+static void read_note(struct note *stn) {
     FILE *note_fp;
     char *editor, *command, *note_fn;
     int ch;
 
-    note_fn = malloc_wppr(strlen(storage_path) + strlen(filename) + 1, __func__);
-    strcpy(note_fn, storage_path);
-    strcat(note_fn, filename);
+    note_fn = malloc_wppr(strlen(stn->storage_path) + strlen(stn->filename) + 1, __func__);
+    strcpy(note_fn, stn->storage_path);
+    strcat(note_fn, stn->filename);
 
     editor = getenv("EDITOR");
     if (editor == NULL) {
@@ -143,10 +146,10 @@ static void read_note(char *storage_path, char *filename) {
     free(note_fn);
 }
 
-static void list_notes_files(char *storage_path) {
+static void list_notes_files(struct note *stn) {
     DIR *dp;
     struct dirent *ep;
-    dp = opendir(storage_path);
+    dp = opendir(stn->storage_path);
 
     if (dp == NULL)
         perror("Storage dir could not be opened.\n");
@@ -159,30 +162,27 @@ static void list_notes_files(char *storage_path) {
     }
 }
 
-static struct write_info *write_note(char *storage_path) {
+static void write_note(struct note *stn) {
     char *tmp_fn, *tmpf_path, *command, *editor, *tmp_str;
-    struct write_info *wi; 
-
-    wi = malloc_wppr(sizeof(struct write_info), __func__);
 
     tmp_fn = tmpnam(NULL);
 
     tmp_str = getenv("EDITOR");
     if (tmp_str == NULL) {
-        wi->ns = FROM_STDIN;
-        wi->tmpf_path = NULL;
-        wi->buffer = NULL;
-        return wi;
+        stn->ns = FROM_STDIN;
+        stn->tmpf_path = NULL;
+        stn->buffer = NULL;
+        return;
     }
 
     editor = malloc_wppr(strlen(tmp_str) + 1, __func__);
     strcpy(editor, tmp_str);
 
-    tmpf_path = malloc_wppr(strlen(storage_path) + strlen(tmp_fn) + 1, __func__);
-    strcpy(tmpf_path, storage_path);
+    tmpf_path = malloc_wppr(strlen(stn->storage_path) + strlen(tmp_fn) + 1, __func__);
+    strcpy(tmpf_path, stn->storage_path);
     strcat(tmpf_path, tmp_fn + TMP_NM_SLICE);
 
-    command = malloc_wppr(strlen(editor) + strlen(storage_path) + strlen(tmp_fn) + 2, __func__);
+    command = malloc_wppr(strlen(editor) + strlen(tmpf_path) + 2, __func__);
     strcpy(command, editor);
     strcat(command, " ");
     strcat(command, tmpf_path);
@@ -192,11 +192,9 @@ static struct write_info *write_note(char *storage_path) {
     free(editor);
     free(command);
 
-    wi->ns = FROM_FILE;
-    wi->tmpf_path = tmpf_path;
-    wi->buffer = NULL;
-
-    return wi;
+    stn->ns = FROM_FILE;
+    stn->tmpf_path = tmpf_path;
+    stn->buffer = NULL;
 }
 
 static char *read_stdin(void) {
@@ -226,47 +224,44 @@ static char *read_stdin(void) {
     return buffer;
 }
 
-static void check_write(struct write_info *wi) {
+static void check_write(struct note *stn) {
     FILE *read_file;
     int ch, i = 0;
-    bool write_valid = false;
 
-    if (wi->ns == FROM_FILE) {
-        read_file = fopen(wi->tmpf_path, "r");
+    if (stn->ns == FROM_FILE) {
+        read_file = fopen(stn->tmpf_path, "r");
         if (read_file == NULL) {
-            wi->write_error = true;
+            stn->write_error = true;
             return;
         }
 
         while ((ch = fgetc(read_file)) != EOF)
             if (!isspace(ch)) {
-                write_valid = true;
+                stn->write_error = false;
                 break;
             }
 
         fclose(read_file);
-    } else {
-        while ((ch = wi->buffer[i++]) != '\0')
+    } else if (stn->ns == FROM_STDIN) {
+        while ((ch = stn->buffer[i++]) != '\0') {
             if (!isspace(ch)) {
-                write_valid = true;
+                stn->write_error = false;
                 break;
             }
+        }
     }
-
-    if (!write_valid)
-        wi->write_error = true;
 }
 
-static void store_note(struct write_info *wi, char *storage_path, char *filename) {
+static void store_note(struct note *stn) {
     FILE *read_file, *write_file;
     char *notef_path, date_buffer[100];
     int ch, i = 0;
     time_t current;
     struct tm *t;
 
-    notef_path = malloc_wppr(strlen(storage_path) + strlen(filename) + 1, __func__);
-    strcpy(notef_path, storage_path);
-    strcat(notef_path, filename);
+    notef_path = malloc_wppr(strlen(stn->storage_path) + strlen(stn->filename) + 1, __func__);
+    strcpy(notef_path, stn->storage_path);
+    strcat(notef_path, stn->filename);
 
     write_file = fopen(notef_path, "a");
     if (write_file == NULL)
@@ -278,8 +273,8 @@ static void store_note(struct write_info *wi, char *storage_path, char *filename
     strftime(date_buffer, sizeof(date_buffer), "%A, %F %H:%M", t);
     fprintf(write_file, "%s\n", date_buffer);
 
-    if (wi->ns == FROM_FILE) {
-        read_file = fopen(wi->tmpf_path, "r");
+    if (stn->ns == FROM_FILE) {
+        read_file = fopen(stn->tmpf_path, "r");
         if (read_file == NULL)
             terminate("%s", "Error: not able to open temp file for reading.\n");
 
@@ -287,8 +282,8 @@ static void store_note(struct write_info *wi, char *storage_path, char *filename
             fputc(ch, write_file);
 
         fclose(read_file);
-    } else {
-        while ((ch = wi->buffer[i++]) != '\0')
+    } else if (stn->ns == FROM_STDIN) {
+        while ((ch = stn->buffer[i++]) != '\0')
             fputc(ch, write_file);
     }
 
@@ -298,19 +293,18 @@ static void store_note(struct write_info *wi, char *storage_path, char *filename
     free(notef_path);
 }
 
-static void cleanup(struct write_info *wi, char *storage_path) {
-    if (wi->ns == FROM_FILE) {
-        if (!wi->write_error)
-            remove(wi->tmpf_path);
-        free(wi->tmpf_path);
-    } else {
-        free(wi->buffer);
+static void cleanup(struct note *stn) {
+    if (stn->ns == FROM_FILE) {
+        if (!stn->write_error)
+            remove(stn->tmpf_path);
+        free(stn->tmpf_path);
+    } else if (stn->ns == FROM_STDIN) {
+        free(stn->buffer);
     }
 
-    free(wi);
-    free(storage_path);
+    free(stn->storage_path);
 
-    if (wi->write_error)
+    if (stn->write_error)
         terminate("%s", "Error: write error occured.\n");
 }
 
