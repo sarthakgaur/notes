@@ -5,6 +5,9 @@
 #include <ctype.h>
 #include <time.h>
 
+#include <sys/types.h>
+#include <dirent.h>
+
 #include "config.h"
 #include "utilities.h"
 
@@ -20,15 +23,16 @@
 // TODO Get rid of config files and use the environment for location. // Done
 // TODO Add reading and editing options for notes. // Done
 // TODO If no note is added terminate the program. // Done
-// TODO Temp file after check_write terminates are not deleted. Need fix.
-// TODO Refactoring required so that only cleanup frees the resources.
+// TODO Temp file after check_write terminates are not deleted. Need fix. // Done
+// TODO Refactoring required so that only cleanup frees the resources. // Done
+// TODO Add support to view files stored in the notes dir. // Done
 // TODO Improve error messages.
-// TODO Add support to view files stored in the notes dir.
 
 enum request {
     WRITE_NOTE,
     READ_TMP_FILE,
     READ_SPECIFIED_FILE,
+    LIST_NOTES_FILES,
 };
 
 enum note_source {
@@ -45,6 +49,7 @@ struct write_info {
 
 static void controller(enum request req, char *filename);
 static void read_note(char *storage_path, char *filename);
+static void list_notes_files(char *storage_path);
 static struct write_info *write_note(char *storage_path);
 static void check_write(struct write_info *wi);
 static char *read_stdin(void);
@@ -58,6 +63,8 @@ int main(int argc, char *argv[]) {
     if (argc == 2) {
         if (strcmp(argv[1], "-e") == 0) {
             req = READ_TMP_FILE;
+        } else if (strcmp(argv[1], "-l") == 0) {
+            req = LIST_NOTES_FILES;
         } else {
             filename = argv[1];
             req = WRITE_NOTE;
@@ -98,6 +105,10 @@ static void controller(enum request req, char *filename) {
             read_note(storage_path, filename);
             free(storage_path);
             break;
+        case LIST_NOTES_FILES:
+            list_notes_files(storage_path);
+            free(storage_path);
+            break;
     }
 }
 
@@ -130,6 +141,22 @@ static void read_note(char *storage_path, char *filename) {
     }
 
     free(note_fn);
+}
+
+static void list_notes_files(char *storage_path) {
+    DIR *dp;
+    struct dirent *ep;
+    dp = opendir(storage_path);
+
+    if (dp == NULL)
+        perror("Storage dir could not be opened.\n");
+    else {
+        while ((ep = readdir(dp)))
+            if (strcmp(ep->d_name, ".") != 0 && strcmp(ep->d_name, "..") != 0)
+                puts(ep->d_name);
+
+        closedir(dp);
+    }
 }
 
 static struct write_info *write_note(char *storage_path) {
