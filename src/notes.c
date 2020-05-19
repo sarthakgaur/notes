@@ -20,6 +20,8 @@
 // TODO Get rid of config files and use the environment for location. // Done
 // TODO Add reading and editing options for notes. // Done
 // TODO If no note is added terminate the program. // Done
+// TODO Temp file after check_write terminates are not deleted. Need fix.
+// TODO Refactoring required so that only cleanup frees the resources.
 // TODO Improve error messages.
 // TODO Add support to view files stored in the notes dir.
 
@@ -38,6 +40,7 @@ struct write_info {
     enum note_source ns;
     char *tmpf_path;
     char *buffer;
+    bool write_error;
 };
 
 static void controller(enum request req, char *filename);
@@ -84,7 +87,10 @@ static void controller(enum request req, char *filename) {
             if (wi->ns == FROM_STDIN)
                 wi->buffer = read_stdin();
             check_write(wi);
-            store_note(wi, storage_path, filename);
+
+            if (!wi->write_error)
+                store_note(wi, storage_path, filename);
+
             cleanup(wi, storage_path);
             break;
         case READ_TMP_FILE:
@@ -200,8 +206,10 @@ static void check_write(struct write_info *wi) {
 
     if (wi->ns == FROM_FILE) {
         read_file = fopen(wi->tmpf_path, "r");
-        if (read_file == NULL)
-            terminate("%s", "Error: not able to open temp file for reading.\n");
+        if (read_file == NULL) {
+            wi->write_error = true;
+            return;
+        }
 
         while ((ch = fgetc(read_file)) != EOF)
             if (!isspace(ch)) {
@@ -219,7 +227,7 @@ static void check_write(struct write_info *wi) {
     }
 
     if (!write_valid)
-        terminate("%s", "Error: no note was written.\n");
+        wi->write_error = true;
 }
 
 static void store_note(struct write_info *wi, char *storage_path, char *filename) {
@@ -265,7 +273,8 @@ static void store_note(struct write_info *wi, char *storage_path, char *filename
 
 static void cleanup(struct write_info *wi, char *storage_path) {
     if (wi->ns == FROM_FILE) {
-        remove(wi->tmpf_path);
+        if (!wi->write_error)
+            remove(wi->tmpf_path);
         free(wi->tmpf_path);
     } else {
         free(wi->buffer);
@@ -273,5 +282,8 @@ static void cleanup(struct write_info *wi, char *storage_path) {
 
     free(wi);
     free(storage_path);
+
+    if (wi->write_error)
+        terminate("%s", "Error: write error occured.\n");
 }
 
