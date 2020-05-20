@@ -28,6 +28,7 @@
 // TODO Need to refactor the calls of free and cleanup. // Done
 // TODO Improve function signatures. // Done
 // TODO Add option to write the note from the command line. // Done
+// TODO Add option to delete a note.
 // TODO Improve error messages.
 // TODO Add comments to functions.
 
@@ -120,7 +121,9 @@ static void controller(struct request *req) {
         case QUICK_WRITE:
             stn.buffer = req->buffer;
             stn.ns = FROM_CMDLINE;
-            store_note(&stn);
+            check_write(&stn);
+            if (!stn.write_error)
+                store_note(&stn);
             break;
         case WRITE_NOTE:
             write_note(&stn);
@@ -255,6 +258,8 @@ static void check_write(struct note *stn) {
     FILE *read_file;
     int ch, i = 0;
 
+    stn->write_error = true;
+
     if (stn->ns == FROM_FILE) {
         read_file = fopen(stn->tmpf_path, "r");
         if (read_file == NULL) {
@@ -269,7 +274,7 @@ static void check_write(struct note *stn) {
             }
 
         fclose(read_file);
-    } else if (stn->ns == FROM_STDIN) {
+    } else if (stn->ns == FROM_STDIN || stn->ns == FROM_CMDLINE) {
         while ((ch = stn->buffer[i++]) != '\0') {
             if (!isspace(ch)) {
                 stn->write_error = false;
@@ -312,6 +317,7 @@ static void store_note(struct note *stn) {
     } else if (stn->ns == FROM_STDIN || stn->ns == FROM_CMDLINE) {
         while ((ch = stn->buffer[i++]) != '\0')
             fputc(ch, write_file);
+        fputc('\n', write_file);
     }
 
     fprintf(write_file, "\n");
