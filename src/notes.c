@@ -27,10 +27,12 @@
 // TODO Add support to view files stored in the notes dir. // Done
 // TODO Need to refactor the calls of free and cleanup. // Done
 // TODO Improve function signatures. // Done
+// TODO Add option to write the note from the command line. // Done
 // TODO Improve error messages.
 // TODO Add comments to functions.
 
-enum request {
+enum request_type {
+    QUICK_WRITE,
     WRITE_NOTE,
     READ_TMP_FILE,
     READ_SPECIFIED_FILE,
@@ -38,9 +40,16 @@ enum request {
 };
 
 enum note_source {
+    FROM_CMDLINE,
     FROM_STDIN,
     FROM_FILE,
     NO_SOURCE,
+};
+
+struct request {
+    enum request_type rt;
+    char *filename;
+    char *buffer;
 };
 
 struct note {
@@ -52,7 +61,7 @@ struct note {
     char *buffer;
 };
 
-static void controller(enum request req, char *filename);
+static void controller(struct request *req);
 static void read_note(struct note *stn);
 static void list_notes_files(struct note *stn);
 static void write_note(struct note *stn);
@@ -62,39 +71,57 @@ static void store_note(struct note *stn);
 static void cleanup(struct note *stn);
 
 int main(int argc, char *argv[]) {
-    char *filename = "temp.txt";
-    enum request req;
+    struct request req;
+
+    req.filename = "temp.txt";
 
     if (argc == 2) {
         if (strcmp(argv[1], "-e") == 0) {
-            req = READ_TMP_FILE;
+            req.rt = READ_TMP_FILE;
         } else if (strcmp(argv[1], "-l") == 0) {
-            req = LIST_NOTES_FILES;
+            req.rt = LIST_NOTES_FILES;
         } else {
-            filename = argv[1];
-            req = WRITE_NOTE;
+            req.rt = WRITE_NOTE;
+            req.filename = argv[1];
         }
-    } else if (argc == 3 && strcmp(argv[1], "-e") == 0) {
-        req = READ_SPECIFIED_FILE;
-        filename = argv[2];
+    } else if (argc == 3) {
+        if (strcmp(argv[1], "-e") == 0) {
+            req.rt = READ_SPECIFIED_FILE;
+            req.filename = argv[2];
+        } else if (strcmp(argv[1], "-n") == 0) {
+            req.rt = QUICK_WRITE;
+            req.buffer = argv[2];
+        } else {
+            terminate("%s", "Invalid command\n");
+        }
+    } else if (argc == 4 && strcmp(argv[2], "-n") == 0) {
+        req.rt = QUICK_WRITE;
+        req.filename = argv[1];
+        req.buffer = argv[3];
     } else if (argc == 1) {
-        req = WRITE_NOTE;
-    } else
+        req.rt = WRITE_NOTE;
+    } else {
         terminate("%s", "Invalid command\n");
+    }
 
-    controller(req, filename);
+    controller(&req);
 
     return 0;
 }
 
-static void controller(enum request req, char *filename) {
+static void controller(struct request *req) {
     struct note stn; 
 
     stn.ns = NO_SOURCE;
     stn.storage_path = read_config();
-    stn.filename = filename;
+    stn.filename = req->filename;
 
-    switch (req) {
+    switch (req->rt) {
+        case QUICK_WRITE:
+            stn.buffer = req->buffer;
+            stn.ns = FROM_CMDLINE;
+            store_note(&stn);
+            break;
         case WRITE_NOTE:
             write_note(&stn);
             if (stn.ns == FROM_STDIN)
@@ -282,7 +309,7 @@ static void store_note(struct note *stn) {
             fputc(ch, write_file);
 
         fclose(read_file);
-    } else if (stn->ns == FROM_STDIN) {
+    } else if (stn->ns == FROM_STDIN || stn->ns == FROM_CMDLINE) {
         while ((ch = stn->buffer[i++]) != '\0')
             fputc(ch, write_file);
     }
