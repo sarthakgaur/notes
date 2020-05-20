@@ -28,7 +28,9 @@
 // TODO Need to refactor the calls of free and cleanup. // Done
 // TODO Improve function signatures. // Done
 // TODO Add option to write the note from the command line. // Done
+// TODO Add an help option that lists all the options. // Done
 // TODO Add option to delete a note.
+// TODO Add a basic templating system.
 // TODO Improve error messages.
 // TODO Add comments to functions.
 
@@ -38,6 +40,7 @@ enum request_type {
     READ_TMP_FILE,
     READ_SPECIFIED_FILE,
     LIST_NOTES_FILES,
+    PRINT_HELP,
 };
 
 enum note_source {
@@ -69,6 +72,7 @@ static void write_note(struct note *stn);
 static void check_write(struct note *stn);
 static char *read_stdin(void);
 static void store_note(struct note *stn);
+static void print_help();
 static void cleanup(struct note *stn);
 
 int main(int argc, char *argv[]) {
@@ -81,6 +85,8 @@ int main(int argc, char *argv[]) {
             req.rt = READ_TMP_FILE;
         } else if (strcmp(argv[1], "-l") == 0) {
             req.rt = LIST_NOTES_FILES;
+        } else if (strcmp(argv[1], "-h") == 0) { 
+            req.rt = PRINT_HELP;
         } else {
             req.rt = WRITE_NOTE;
             req.filename = argv[1];
@@ -93,7 +99,7 @@ int main(int argc, char *argv[]) {
             req.rt = QUICK_WRITE;
             req.buffer = argv[2];
         } else {
-            terminate("%s", "Invalid command\n");
+            req.rt = PRINT_HELP;
         }
     } else if (argc == 4 && strcmp(argv[2], "-n") == 0) {
         req.rt = QUICK_WRITE;
@@ -139,6 +145,9 @@ static void controller(struct request *req) {
             break;
         case LIST_NOTES_FILES:
             list_notes_files(&stn);
+            break;
+        case PRINT_HELP:
+            print_help();
             break;
     }
 
@@ -324,6 +333,17 @@ static void store_note(struct note *stn) {
 
     fclose(write_file);
     free(notef_path);
+}
+
+static void print_help() {
+    char *help_msg = 
+        "The following options are supported:\n\n"
+        "filename:           Append a note to the file specified.\n"
+        "-e filename:        Open the file for editing. If filename is missing, temp file is opened.\n" 
+        "-l:                 List all the notes files in the notes directory.\n"
+        "filename -n \"note\": Add the note to the file. If filename is missing, temp file is used.\n";
+
+    printf("%s", help_msg);
 }
 
 static void cleanup(struct note *stn) {
