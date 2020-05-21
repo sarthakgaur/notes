@@ -29,8 +29,10 @@
 // TODO Improve function signatures. // Done
 // TODO Add option to write the note from the command line. // Done
 // TODO Add an help option that lists all the options. // Done
+// TODO Add a basic templating system. // Done
+// TODO Add an option to create template.
+// TODO Refactor argument passing and controller function.
 // TODO Add option to delete a note.
-// TODO Add a basic templating system.
 // TODO Improve error messages.
 // TODO Add comments to functions.
 
@@ -40,6 +42,8 @@ enum request_type {
     READ_TMP_FILE,
     READ_SPECIFIED_FILE,
     LIST_NOTES_FILES,
+    WRITE_DEFAULT_TEMPLATE,
+    WRITE_SPECIFIED_TEMPLATE,
     PRINT_HELP,
 };
 
@@ -53,6 +57,7 @@ enum note_source {
 struct request {
     enum request_type rt;
     char *filename;
+    char *template_filename;
     char *buffer;
 };
 
@@ -61,6 +66,7 @@ struct note {
     bool write_error;
     char *storage_path;
     char *filename;
+    char *template_filename;
     char *tmpf_path;
     char *buffer;
 };
@@ -69,6 +75,7 @@ static void controller(struct request *req);
 static void read_note(struct note *stn);
 static void list_notes_files(struct note *stn);
 static void write_note(struct note *stn);
+static void write_template(struct note *stn);
 static void check_write(struct note *stn);
 static char *read_stdin(void);
 static void store_note(struct note *stn);
@@ -79,6 +86,7 @@ int main(int argc, char *argv[]) {
     struct request req;
 
     req.filename = "temp.txt";
+    req.template_filename = "template.txt";
 
     if (argc == 2) {
         if (strcmp(argv[1], "-e") == 0) {
@@ -87,6 +95,8 @@ int main(int argc, char *argv[]) {
             req.rt = LIST_NOTES_FILES;
         } else if (strcmp(argv[1], "-h") == 0) { 
             req.rt = PRINT_HELP;
+        } else if (strcmp(argv[1], "-t") == 0) {
+            req.rt = WRITE_DEFAULT_TEMPLATE;
         } else {
             req.rt = WRITE_NOTE;
             req.filename = argv[1];
@@ -98,13 +108,24 @@ int main(int argc, char *argv[]) {
         } else if (strcmp(argv[1], "-n") == 0) {
             req.rt = QUICK_WRITE;
             req.buffer = argv[2];
+        } else if (strcmp(argv[2], "-t") == 0) {
+            req.rt = WRITE_DEFAULT_TEMPLATE;
+            req.filename = argv[1];
+        }  else {
+            req.rt = PRINT_HELP;
+        }
+    } else if (argc == 4) {
+        if (strcmp(argv[2], "-t") == 0) {
+            req.rt = WRITE_SPECIFIED_TEMPLATE;
+            req.filename = argv[1];
+            req.template_filename = argv[3];
+        } else if (strcmp(argv[2], "-n") == 0) {
+            req.rt = QUICK_WRITE;
+            req.filename = argv[1];
+            req.buffer = argv[3];
         } else {
             req.rt = PRINT_HELP;
         }
-    } else if (argc == 4 && strcmp(argv[2], "-n") == 0) {
-        req.rt = QUICK_WRITE;
-        req.filename = argv[1];
-        req.buffer = argv[3];
     } else if (argc == 1) {
         req.rt = WRITE_NOTE;
     } else {
@@ -122,6 +143,7 @@ static void controller(struct request *req) {
     stn.ns = NO_SOURCE;
     stn.storage_path = read_config();
     stn.filename = req->filename;
+    stn.template_filename = req->template_filename;
 
     switch (req->rt) {
         case QUICK_WRITE:
@@ -145,6 +167,14 @@ static void controller(struct request *req) {
             break;
         case LIST_NOTES_FILES:
             list_notes_files(&stn);
+            break;
+        case WRITE_DEFAULT_TEMPLATE:
+        case WRITE_SPECIFIED_TEMPLATE:
+            stn.ns = FROM_FILE;
+            write_template(&stn);
+            check_write(&stn);
+            if (!stn.write_error)
+                store_note(&stn);
             break;
         case PRINT_HELP:
             print_help();
@@ -204,8 +234,6 @@ static void list_notes_files(struct note *stn) {
 static void write_note(struct note *stn) {
     char *tmp_fn, *tmpf_path, *command, *editor, *tmp_str;
 
-    tmp_fn = tmpnam(NULL);
-
     tmp_str = getenv("EDITOR");
     if (tmp_str == NULL) {
         stn->ns = FROM_STDIN;
@@ -217,6 +245,7 @@ static void write_note(struct note *stn) {
     editor = malloc_wppr(strlen(tmp_str) + 1, __func__);
     strcpy(editor, tmp_str);
 
+    tmp_fn = tmpnam(NULL);
     tmpf_path = malloc_wppr(strlen(stn->storage_path) + strlen(tmp_fn) + 1, __func__);
     strcpy(tmpf_path, stn->storage_path);
     strcat(tmpf_path, tmp_fn + TMP_NM_SLICE);
@@ -261,6 +290,58 @@ static char *read_stdin(void) {
     buffer[i] = '\0';
 
     return buffer;
+}
+
+static void write_template(struct note *stn) {
+    FILE *read_file, *write_file;
+    char *template_fpath;
+    char *template_dir = "templates/", *tmp_fn, *tmp_str, *editor, *tmpf_path, *command;
+    int ch, template_fpath_size;
+
+    tmp_str = getenv("EDITOR");
+    if (tmp_str == NULL)
+        terminate("%s", "$EDITOR environment variable is required for template operation.\n");
+
+    editor = malloc_wppr(strlen(tmp_str) + 1, __func__);
+    strcpy(editor, tmp_str);
+
+    template_fpath_size = strlen(stn->storage_path) + strlen(template_dir) + strlen(stn->template_filename) + 1;
+    template_fpath = malloc_wppr(template_fpath_size, __func__);
+    strcpy(template_fpath, stn->storage_path);
+    strcat(template_fpath, template_dir);
+    strcat(template_fpath, stn->template_filename);
+
+    tmp_fn = tmpnam(NULL);
+    tmpf_path = malloc_wppr(strlen(stn->storage_path) + strlen(tmp_fn) + 1, __func__);
+    strcpy(tmpf_path, stn->storage_path);
+    strcat(tmpf_path, tmp_fn + TMP_NM_SLICE);
+
+    read_file = fopen(template_fpath, "r");
+    if (read_file == NULL)
+        terminate("%s", "Error: template file could not be opened.\n");
+
+    write_file = fopen(tmpf_path, "w");
+    if (write_file == NULL)
+        terminate("%s", "Error: temp file could not be opened for writing.\n");
+
+    while ((ch = fgetc(read_file)) != EOF)
+        fputc(ch, write_file);
+
+    fclose(write_file);
+    fclose(read_file);
+
+    command = malloc_wppr(strlen(editor) + strlen(tmpf_path) + 2, __func__);
+    strcpy(command, editor);
+    strcat(command, " ");
+    strcat(command, tmpf_path);
+
+    system(command);
+
+    free(editor);
+    free(template_fpath);
+    free(command);
+
+    stn->tmpf_path = tmpf_path;
 }
 
 static void check_write(struct note *stn) {
