@@ -30,28 +30,28 @@
 // TODO Add option to write the note from the command line. // Done
 // TODO Add an help option that lists all the options. // Done
 // TODO Add a basic templating system. // Done
-// TODO Add an option to create template.
 // TODO Refactor argument passing and controller function.
+// TODO Add an option to create template.
 // TODO Add option to delete a note.
 // TODO Improve error messages.
 // TODO Add comments to functions.
 
 enum request_type {
+    NO_REQUEST,
     QUICK_WRITE,
     WRITE_NOTE,
-    READ_TMP_FILE,
-    READ_SPECIFIED_FILE,
+    READ_NOTE,
     LIST_NOTES_FILES,
-    WRITE_DEFAULT_TEMPLATE,
-    WRITE_SPECIFIED_TEMPLATE,
+    USE_TEMPLATE,
     PRINT_HELP,
 };
 
 enum note_source {
+    NO_SOURCE,
     FROM_CMDLINE,
     FROM_STDIN,
     FROM_FILE,
-    NO_SOURCE,
+    FROM_TEMPLATE,
 };
 
 struct request {
@@ -72,6 +72,7 @@ struct note {
 };
 
 static void controller(struct request *req);
+static void write_handler(struct note *stn);
 static void read_note(struct note *stn);
 static void list_notes_files(struct note *stn);
 static void write_note(struct note *stn);
@@ -90,33 +91,33 @@ int main(int argc, char *argv[]) {
 
     if (argc == 2) {
         if (strcmp(argv[1], "-e") == 0) {
-            req.rt = READ_TMP_FILE;
+            req.rt = READ_NOTE;
         } else if (strcmp(argv[1], "-l") == 0) {
             req.rt = LIST_NOTES_FILES;
         } else if (strcmp(argv[1], "-h") == 0) { 
             req.rt = PRINT_HELP;
         } else if (strcmp(argv[1], "-t") == 0) {
-            req.rt = WRITE_DEFAULT_TEMPLATE;
+            req.rt = USE_TEMPLATE;
         } else {
             req.rt = WRITE_NOTE;
             req.filename = argv[1];
         }
     } else if (argc == 3) {
         if (strcmp(argv[1], "-e") == 0) {
-            req.rt = READ_SPECIFIED_FILE;
+            req.rt = READ_NOTE;
             req.filename = argv[2];
         } else if (strcmp(argv[1], "-n") == 0) {
             req.rt = QUICK_WRITE;
             req.buffer = argv[2];
         } else if (strcmp(argv[2], "-t") == 0) {
-            req.rt = WRITE_DEFAULT_TEMPLATE;
+            req.rt = USE_TEMPLATE;
             req.filename = argv[1];
         }  else {
             req.rt = PRINT_HELP;
         }
     } else if (argc == 4) {
         if (strcmp(argv[2], "-t") == 0) {
-            req.rt = WRITE_SPECIFIED_TEMPLATE;
+            req.rt = USE_TEMPLATE;
             req.filename = argv[1];
             req.template_filename = argv[3];
         } else if (strcmp(argv[2], "-n") == 0) {
@@ -144,44 +145,53 @@ static void controller(struct request *req) {
     stn.storage_path = read_config();
     stn.filename = req->filename;
     stn.template_filename = req->template_filename;
+    stn.buffer = req->buffer;
 
     switch (req->rt) {
         case QUICK_WRITE:
-            stn.buffer = req->buffer;
             stn.ns = FROM_CMDLINE;
-            check_write(&stn);
-            if (!stn.write_error)
-                store_note(&stn);
+            write_handler(&stn);
             break;
         case WRITE_NOTE:
-            write_note(&stn);
-            if (stn.ns == FROM_STDIN)
-                stn.buffer = read_stdin();
-            check_write(&stn);
-            if (!stn.write_error)
-                store_note(&stn);
+            write_handler(&stn);
             break;
-        case READ_TMP_FILE:
-        case READ_SPECIFIED_FILE:
+        case USE_TEMPLATE:
+            stn.ns = FROM_TEMPLATE;
+            write_handler(&stn);
+            break;
+        case READ_NOTE:
             read_note(&stn);
             break;
         case LIST_NOTES_FILES:
             list_notes_files(&stn);
             break;
-        case WRITE_DEFAULT_TEMPLATE:
-        case WRITE_SPECIFIED_TEMPLATE:
-            stn.ns = FROM_FILE;
-            write_template(&stn);
-            check_write(&stn);
-            if (!stn.write_error)
-                store_note(&stn);
-            break;
         case PRINT_HELP:
             print_help();
+            break;
+        default:
             break;
     }
 
     cleanup(&stn);
+}
+
+static void write_handler(struct note *stn) {
+    switch (stn->ns) {
+        case NO_SOURCE:
+            write_note(stn);
+            if (stn->ns == FROM_STDIN)
+                stn->buffer = read_stdin();
+            break;
+        case FROM_TEMPLATE:
+            write_template(stn);
+            break;
+        default:
+            break;
+    }
+
+    check_write(stn);
+    if (!stn->write_error)
+        store_note(stn);
 }
 
 static void read_note(struct note *stn) {
@@ -350,7 +360,7 @@ static void check_write(struct note *stn) {
 
     stn->write_error = true;
 
-    if (stn->ns == FROM_FILE) {
+    if (stn->ns == FROM_FILE || stn->ns == FROM_TEMPLATE) {
         read_file = fopen(stn->tmpf_path, "r");
         if (read_file == NULL) {
             stn->write_error = true;
@@ -395,7 +405,7 @@ static void store_note(struct note *stn) {
     strftime(date_buffer, sizeof(date_buffer), "%A, %F %H:%M", t);
     fprintf(write_file, "%s\n", date_buffer);
 
-    if (stn->ns == FROM_FILE) {
+    if (stn->ns == FROM_FILE || stn->ns == FROM_TEMPLATE) {
         read_file = fopen(stn->tmpf_path, "r");
         if (read_file == NULL)
             terminate("%s", "Error: not able to open temp file for reading.\n");
@@ -428,7 +438,7 @@ static void print_help() {
 }
 
 static void cleanup(struct note *stn) {
-    if (stn->ns == FROM_FILE) {
+    if (stn->ns == FROM_FILE || stn->ns == FROM_TEMPLATE) {
         if (!stn->write_error)
             remove(stn->tmpf_path);
         free(stn->tmpf_path);
