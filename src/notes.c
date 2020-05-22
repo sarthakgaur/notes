@@ -35,6 +35,7 @@
 // TODO Add a version number. // Done
 // TODO Update help. // Done
 // TODO Add an option to create template. // Done
+// TODO Improve code formatting. // Done
 // TODO Improve error messages.
 // TODO Add comments to functions.
 // TODO Use getopt to parse command line arguments.
@@ -82,10 +83,10 @@ static void read_note(struct note *stn);
 static void list_notes_files(struct note *stn);
 static void write_note(struct note *stn);
 static void write_template(struct note *stn);
-static void check_write(struct note *stn);
-static char *read_stdin(void);
-static void store_note(struct note *stn);
 static void save_template(struct note *stn);
+static void check_write(struct note *stn);
+static void store_note(struct note *stn);
+static char *read_stdin(void);
 static void print_help(void);
 static void print_version(void);
 static void cleanup(struct note *stn);
@@ -96,7 +97,9 @@ int main(int argc, char *argv[]) {
     req.filename = "temp.txt";
     req.template_filename = "template.txt";
 
-    if (argc == 2) {
+    if (argc == 1) {
+        req.rt = WRITE_NOTE;
+    } else if (argc == 2) {
         if (strcmp(argv[1], "-e") == 0) {
             req.rt = READ_NOTE;
         } else if (strcmp(argv[1], "-l") == 0) {
@@ -144,8 +147,6 @@ int main(int argc, char *argv[]) {
         } else {
             req.rt = PRINT_HELP;
         }
-    } else if (argc == 1) {
-        req.rt = WRITE_NOTE;
     } else {
         terminate("%s", "Invalid command\n");
     }
@@ -202,8 +203,9 @@ static void write_handler(struct note *stn) {
     switch (stn->ns) {
         case NO_SOURCE:
             write_note(stn);
-            if (stn->ns == FROM_STDIN)
+            if (stn->ns == FROM_STDIN) {
                 stn->buffer = read_stdin();
+            }
             break;
         case FROM_TEMPLATE:
             write_template(stn);
@@ -213,8 +215,9 @@ static void write_handler(struct note *stn) {
     }
 
     check_write(stn);
-    if (!stn->write_error)
+    if (!stn->write_error) {
         store_note(stn);
+    }
 }
 
 static void read_note(struct note *stn) {
@@ -229,10 +232,12 @@ static void read_note(struct note *stn) {
     editor = getenv("EDITOR");
     if (editor == NULL) {
         note_fp = fopen(note_fn, "r");
-        if (note_fp == NULL)
+        if (note_fp == NULL) {
             terminate("%s", "Error: not able to open note file for reading.\n");
-        while ((ch = fgetc(note_fp)) != EOF)
+        }
+        while ((ch = fgetc(note_fp)) != EOF) {
             putchar(ch);
+        }
         fclose(note_fp);
     } else {
         command = malloc_wppr(strlen(editor) + strlen(note_fn) + 2, __func__);
@@ -251,14 +256,17 @@ static void read_note(struct note *stn) {
 static void list_notes_files(struct note *stn) {
     DIR *dp;
     struct dirent *ep;
+
     dp = opendir(stn->storage_path);
 
-    if (dp == NULL)
+    if (dp == NULL) {
         perror("Storage dir could not be opened.\n");
-    else {
-        while ((ep = readdir(dp)))
-            if (strcmp(ep->d_name, ".") != 0 && strcmp(ep->d_name, "..") != 0)
+    } else {
+        while ((ep = readdir(dp))) {
+            if (strcmp(ep->d_name, ".") != 0 && strcmp(ep->d_name, "..") != 0) {
                 puts(ep->d_name);
+            }
+        }
 
         closedir(dp);
     }
@@ -298,42 +306,16 @@ static void write_note(struct note *stn) {
     stn->buffer = NULL;
 }
 
-static char *read_stdin(void) {
-    char *buffer;
-    int ch, i = 0, size = SIZE_HUN;
-
-    buffer = malloc_wppr(size, __func__);
-
-    printf("Write your note: ");
-
-    while ((ch = getchar()) != '\n' && ch != EOF) {
-        if (i < size) {
-            buffer[i++] = ch;
-            if (i == size - 2) {
-                size *= 2;
-
-                buffer = realloc(buffer, size);
-                if (buffer == NULL)
-                    terminate("%s", "realloc failed in read_stdout.\n");
-            }
-        }
-    }
-
-    buffer[i++] = '\n';
-    buffer[i] = '\0';
-
-    return buffer;
-}
-
 static void write_template(struct note *stn) {
     FILE *read_file, *write_file;
-    char *template_fpath;
-    char *template_dir = "templates/", *tmp_fn, *tmp_str, *editor, *tmpf_path, *command;
+    char *template_fpath, *tmp_fn, *tmp_str, *editor, *tmpf_path, *command;
+    char *template_dir = "templates/";
     int ch, template_fpath_size;
 
     tmp_str = getenv("EDITOR");
-    if (tmp_str == NULL)
+    if (tmp_str == NULL) {
         terminate("%s", "$EDITOR environment variable is required for template operation.\n");
+    }
 
     editor = malloc_wppr(strlen(tmp_str) + 1, __func__);
     strcpy(editor, tmp_str);
@@ -350,15 +332,18 @@ static void write_template(struct note *stn) {
     strcat(tmpf_path, tmp_fn + TMP_NM_SLICE);
 
     read_file = fopen(template_fpath, "r");
-    if (read_file == NULL)
+    if (read_file == NULL) {
         terminate("%s", "Error: template file could not be opened.\n");
+    }
 
     write_file = fopen(tmpf_path, "w");
-    if (write_file == NULL)
+    if (write_file == NULL) {
         terminate("%s", "Error: temp file could not be opened for writing.\n");
+    }
 
-    while ((ch = fgetc(read_file)) != EOF)
+    while ((ch = fgetc(read_file)) != EOF) {
         fputc(ch, write_file);
+    }
 
     fclose(write_file);
     fclose(read_file);
@@ -377,6 +362,44 @@ static void write_template(struct note *stn) {
     stn->tmpf_path = tmpf_path;
 }
 
+static void save_template(struct note *stn) {
+    char *template_fpath, *tmp_str, *editor, *command, *template_dir = "templates/";
+    int template_fpath_size;
+    struct stat st = {0};
+
+    tmp_str = getenv("EDITOR");
+    if (tmp_str == NULL) {
+        terminate("%s", "$EDITOR environment variable is required for template operation.\n");
+    }
+
+    editor = malloc_wppr(strlen(tmp_str) + 1, __func__);
+    strcpy(editor, tmp_str);
+
+    template_fpath_size = strlen(stn->storage_path) + strlen(template_dir) + strlen(stn->template_filename) + 1;
+    template_fpath = malloc_wppr(template_fpath_size, __func__);
+    strcpy(template_fpath, stn->storage_path);
+    strcat(template_fpath, template_dir);
+
+    if (stat(template_fpath, &st) == -1) {
+        if (mkdir(template_fpath, 0700) != 0) {
+            terminate("%s", "template folder could not be created\n");
+        }
+    }
+
+    strcat(template_fpath, stn->template_filename);
+
+    command = malloc_wppr(strlen(editor) + strlen(template_fpath) + 2, __func__);
+    strcpy(command, editor);
+    strcat(command, " ");
+    strcat(command, template_fpath);
+
+    system(command);
+
+    free(editor);
+    free(template_fpath);
+    free(command);
+}
+
 static void check_write(struct note *stn) {
     FILE *read_file;
     int ch, i = 0;
@@ -390,11 +413,12 @@ static void check_write(struct note *stn) {
             return;
         }
 
-        while ((ch = fgetc(read_file)) != EOF)
+        while ((ch = fgetc(read_file)) != EOF) {
             if (!isspace(ch)) {
                 stn->write_error = false;
                 break;
             }
+        }
 
         fclose(read_file);
     } else if (stn->ns == FROM_STDIN || stn->ns == FROM_CMDLINE) {
@@ -419,8 +443,9 @@ static void store_note(struct note *stn) {
     strcat(notef_path, stn->filename);
 
     write_file = fopen(notef_path, "a");
-    if (write_file == NULL)
+    if (write_file == NULL) {
         terminate("%s", "Error: not able to open note file for writing.\n");
+    }
 
     current = time(NULL);
     t = localtime(&current);
@@ -430,16 +455,19 @@ static void store_note(struct note *stn) {
 
     if (stn->ns == FROM_FILE || stn->ns == FROM_TEMPLATE) {
         read_file = fopen(stn->tmpf_path, "r");
-        if (read_file == NULL)
+        if (read_file == NULL) {
             terminate("%s", "Error: not able to open temp file for reading.\n");
+        }
 
-        while ((ch = fgetc(read_file)) != EOF)
+        while ((ch = fgetc(read_file)) != EOF) {
             fputc(ch, write_file);
+        }
 
         fclose(read_file);
     } else if (stn->ns == FROM_STDIN || stn->ns == FROM_CMDLINE) {
-        while ((ch = stn->buffer[i++]) != '\0')
+        while ((ch = stn->buffer[i++]) != '\0') {
             fputc(ch, write_file);
+        }
         fputc('\n', write_file);
     }
 
@@ -449,41 +477,32 @@ static void store_note(struct note *stn) {
     free(notef_path);
 }
 
-static void save_template(struct note *stn) {
-    char *template_fpath;
-    char *template_dir = "templates/", *tmp_str, *editor, *command;
-    int template_fpath_size;
+static char *read_stdin(void) {
+    char *buffer;
+    int ch, i = 0, size = SIZE_HUN;
 
-    tmp_str = getenv("EDITOR");
-    if (tmp_str == NULL)
-        terminate("%s", "$EDITOR environment variable is required for template operation.\n");
+    buffer = malloc_wppr(size, __func__);
 
-    editor = malloc_wppr(strlen(tmp_str) + 1, __func__);
-    strcpy(editor, tmp_str);
+    printf("Write your note: ");
 
-    template_fpath_size = strlen(stn->storage_path) + strlen(template_dir) + strlen(stn->template_filename) + 1;
-    template_fpath = malloc_wppr(template_fpath_size, __func__);
-    strcpy(template_fpath, stn->storage_path);
-    strcat(template_fpath, template_dir);
+    while ((ch = getchar()) != '\n' && ch != EOF) {
+        if (i < size) {
+            buffer[i++] = ch;
+            if (i == size - 2) {
+                size *= 2;
 
-    struct stat st = {0};
+                buffer = realloc(buffer, size);
+                if (buffer == NULL) {
+                    terminate("%s", "realloc failed in read_stdout.\n");
+                }
+            }
+        }
+    }
 
-    if (stat(template_fpath, &st) == -1)
-        if (mkdir(template_fpath, 0700) != 0)
-            terminate("%s", "template folder could not be created\n");
+    buffer[i++] = '\n';
+    buffer[i] = '\0';
 
-    strcat(template_fpath, stn->template_filename);
-
-    command = malloc_wppr(strlen(editor) + strlen(template_fpath) + 2, __func__);
-    strcpy(command, editor);
-    strcat(command, " ");
-    strcat(command, template_fpath);
-
-    system(command);
-
-    free(editor);
-    free(template_fpath);
-    free(command);
+    return buffer;
 }
 
 static void print_help(void) {
@@ -504,13 +523,14 @@ static void print_help(void) {
 }
 
 static void print_version(void) {
-    printf("%s\n", "Notes 0.1.1");
+    printf("%s\n", "Notes 0.1.2");
 }
 
 static void cleanup(struct note *stn) {
     if (stn->ns == FROM_FILE || stn->ns == FROM_TEMPLATE) {
-        if (!stn->write_error)
+        if (!stn->write_error) {
             remove(stn->tmpf_path);
+        }
         free(stn->tmpf_path);
     } else if (stn->ns == FROM_STDIN) {
         free(stn->buffer);
@@ -518,7 +538,8 @@ static void cleanup(struct note *stn) {
 
     free(stn->storage_path);
 
-    if (stn->write_error)
+    if (stn->write_error) {
         terminate("%s", "Error: write error occured.\n");
+    }
 }
 
