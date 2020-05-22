@@ -15,28 +15,7 @@
 #define SIZE_HUN 100
 #define TMP_NM_SLICE 5
 
-// TODO Get the storage location. // Done
-// TODO Build the storage location. // Done
-// TODO Split the functions into files. // Done
-// TODO Get editor name from environment. // Done
-// TODO Add malloc wrapper function. // Done
-// TODO Get rid of config files and use the environment for location. // Done
-// TODO Add reading and editing options for notes. // Done
-// TODO If no note is added terminate the program. // Done
-// TODO Temp file after check_write terminates are not deleted. Need fix. // Done
-// TODO Refactoring required so that only cleanup frees the resources. // Done
-// TODO Add support to view files stored in the notes dir. // Done
-// TODO Need to refactor the calls of free and cleanup. // Done
-// TODO Improve function signatures. // Done
-// TODO Add option to write the note from the command line. // Done
-// TODO Add an help option that lists all the options. // Done
-// TODO Add a basic templating system. // Done
-// TODO Refactor argument passing and controller function. // Done
-// TODO Add a version number. // Done
-// TODO Update help. // Done
-// TODO Add an option to create template. // Done
-// TODO Improve code formatting. // Done
-// TODO Improve error messages.
+// TODO Improve error messages. // Done
 // TODO Add comments to functions.
 // TODO Use getopt to parse command line arguments.
 
@@ -148,7 +127,7 @@ int main(int argc, char *argv[]) {
             req.rt = PRINT_HELP;
         }
     } else {
-        terminate("%s", "Invalid command\n");
+        req.rt = PRINT_HELP;
     }
 
     controller(&req);
@@ -260,7 +239,7 @@ static void list_notes_files(struct note *stn) {
     dp = opendir(stn->storage_path);
 
     if (dp == NULL) {
-        perror("Storage dir could not be opened.\n");
+        perror("Error: notes directory could not be opened.\n");
     } else {
         while ((ep = readdir(dp))) {
             if (strcmp(ep->d_name, ".") != 0 && strcmp(ep->d_name, "..") != 0) {
@@ -314,7 +293,7 @@ static void write_template(struct note *stn) {
 
     tmp_str = getenv("EDITOR");
     if (tmp_str == NULL) {
-        terminate("%s", "$EDITOR environment variable is required for template operation.\n");
+        terminate("%s", "Error: $EDITOR environment variable is required for template operation.\n");
     }
 
     editor = malloc_wppr(strlen(tmp_str) + 1, __func__);
@@ -369,7 +348,7 @@ static void save_template(struct note *stn) {
 
     tmp_str = getenv("EDITOR");
     if (tmp_str == NULL) {
-        terminate("%s", "$EDITOR environment variable is required for template operation.\n");
+        terminate("%s", "Error: $EDITOR environment variable is required for template operation.\n");
     }
 
     editor = malloc_wppr(strlen(tmp_str) + 1, __func__);
@@ -382,7 +361,7 @@ static void save_template(struct note *stn) {
 
     if (stat(template_fpath, &st) == -1) {
         if (mkdir(template_fpath, 0700) != 0) {
-            terminate("%s", "template folder could not be created\n");
+            terminate("%s", "Error: template folder could not be created\n");
         }
     }
 
@@ -493,7 +472,7 @@ static char *read_stdin(void) {
 
                 buffer = realloc(buffer, size);
                 if (buffer == NULL) {
-                    terminate("%s", "realloc failed in read_stdout.\n");
+                    terminate("%s", "Error: realloc failed in read_stdout.\n");
                 }
             }
         }
@@ -523,7 +502,7 @@ static void print_help(void) {
 }
 
 static void print_version(void) {
-    printf("%s\n", "Notes 0.1.2");
+    printf("%s\n", "Notes 0.1.3");
 }
 
 static void cleanup(struct note *stn) {
