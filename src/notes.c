@@ -5,6 +5,7 @@
 #include <ctype.h>
 #include <time.h>
 
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <dirent.h>
 
@@ -30,11 +31,13 @@
 // TODO Add option to write the note from the command line. // Done
 // TODO Add an help option that lists all the options. // Done
 // TODO Add a basic templating system. // Done
-// TODO Refactor argument passing and controller function.
-// TODO Add an option to create template.
-// TODO Add option to delete a note.
+// TODO Refactor argument passing and controller function. // Done
+// TODO Add a version number. // Done
+// TODO Update help. // Done
+// TODO Add an option to create template. // Done
 // TODO Improve error messages.
 // TODO Add comments to functions.
+// TODO Use getopt to parse command line arguments.
 
 enum request_type {
     NO_REQUEST,
@@ -43,7 +46,9 @@ enum request_type {
     READ_NOTE,
     LIST_NOTES_FILES,
     USE_TEMPLATE,
+    SAVE_TEMPLATE,
     PRINT_HELP,
+    PRINT_VERSION,
 };
 
 enum note_source {
@@ -80,7 +85,9 @@ static void write_template(struct note *stn);
 static void check_write(struct note *stn);
 static char *read_stdin(void);
 static void store_note(struct note *stn);
-static void print_help();
+static void save_template(struct note *stn);
+static void print_help(void);
+static void print_version(void);
 static void cleanup(struct note *stn);
 
 int main(int argc, char *argv[]) {
@@ -94,10 +101,14 @@ int main(int argc, char *argv[]) {
             req.rt = READ_NOTE;
         } else if (strcmp(argv[1], "-l") == 0) {
             req.rt = LIST_NOTES_FILES;
-        } else if (strcmp(argv[1], "-h") == 0) { 
-            req.rt = PRINT_HELP;
-        } else if (strcmp(argv[1], "-t") == 0) {
+        } else if (strcmp(argv[1], "-t") == 0) { 
             req.rt = USE_TEMPLATE;
+        } else if (strcmp(argv[1], "-st") == 0) {
+            req.rt = SAVE_TEMPLATE; 
+        } else if (strcmp(argv[1], "-h") == 0) {
+            req.rt = PRINT_HELP;
+        } else if (strcmp(argv[1], "--version") == 0) {
+            req.rt = PRINT_VERSION;
         } else {
             req.rt = WRITE_NOTE;
             req.filename = argv[1];
@@ -109,9 +120,15 @@ int main(int argc, char *argv[]) {
         } else if (strcmp(argv[1], "-n") == 0) {
             req.rt = QUICK_WRITE;
             req.buffer = argv[2];
+        } else if (strcmp(argv[1], "-t") == 0) {
+            req.rt = USE_TEMPLATE;
+            req.template_filename = argv[2];
         } else if (strcmp(argv[2], "-t") == 0) {
             req.rt = USE_TEMPLATE;
             req.filename = argv[1];
+        } else if (strcmp(argv[1], "-st") == 0) {
+            req.rt = SAVE_TEMPLATE;
+            req.template_filename = argv[2];
         }  else {
             req.rt = PRINT_HELP;
         }
@@ -159,6 +176,9 @@ static void controller(struct request *req) {
             stn.ns = FROM_TEMPLATE;
             write_handler(&stn);
             break;
+        case SAVE_TEMPLATE:
+            save_template(&stn);
+            break;
         case READ_NOTE:
             read_note(&stn);
             break;
@@ -167,6 +187,9 @@ static void controller(struct request *req) {
             break;
         case PRINT_HELP:
             print_help();
+            break;
+        case PRINT_VERSION:
+            print_version();
             break;
         default:
             break;
@@ -426,15 +449,62 @@ static void store_note(struct note *stn) {
     free(notef_path);
 }
 
-static void print_help() {
+static void save_template(struct note *stn) {
+    char *template_fpath;
+    char *template_dir = "templates/", *tmp_str, *editor, *command;
+    int template_fpath_size;
+
+    tmp_str = getenv("EDITOR");
+    if (tmp_str == NULL)
+        terminate("%s", "$EDITOR environment variable is required for template operation.\n");
+
+    editor = malloc_wppr(strlen(tmp_str) + 1, __func__);
+    strcpy(editor, tmp_str);
+
+    template_fpath_size = strlen(stn->storage_path) + strlen(template_dir) + strlen(stn->template_filename) + 1;
+    template_fpath = malloc_wppr(template_fpath_size, __func__);
+    strcpy(template_fpath, stn->storage_path);
+    strcat(template_fpath, template_dir);
+
+    struct stat st = {0};
+
+    if (stat(template_fpath, &st) == -1)
+        if (mkdir(template_fpath, 0700) != 0)
+            terminate("%s", "template folder could not be created\n");
+
+    strcat(template_fpath, stn->template_filename);
+
+    command = malloc_wppr(strlen(editor) + strlen(template_fpath) + 2, __func__);
+    strcpy(command, editor);
+    strcat(command, " ");
+    strcat(command, template_fpath);
+
+    system(command);
+
+    free(editor);
+    free(template_fpath);
+    free(command);
+}
+
+static void print_help(void) {
     char *help_msg = 
         "The following options are supported:\n\n"
-        "filename:           Append a note to the file specified.\n"
-        "-e filename:        Open the file for editing. If filename is missing, temp file is opened.\n" 
-        "-l:                 List all the notes files in the notes directory.\n"
-        "filename -n \"note\": Add the note to the file. If filename is missing, temp file is used.\n";
+        "filename:             Append a note to the file specified.\n"
+        "-e filename:          Open the file for editing. If filename is missing, temp file is opened.\n" 
+        "-l:                   List all the notes files in the notes directory.\n"
+        "filename -n \"note\":   Add the note to the file. If filename is missing, temp file is used.\n"
+        "-st template_name:    Create or update a template file in templates directory. If no file is\n"
+        "                      Specified template.txt is opened.\n"
+        "filename -t template: Add a note using a template. If filename is missing, temp file is used.\n"
+        "                      If template name is not provided, \"templates/template.txt\" is used.\n"
+        "--version:            Print version number.\n"
+        "-h:                   Print this help message.\n";
 
     printf("%s", help_msg);
+}
+
+static void print_version(void) {
+    printf("%s\n", "Notes 0.1.1");
 }
 
 static void cleanup(struct note *stn) {
