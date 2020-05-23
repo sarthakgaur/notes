@@ -544,7 +544,7 @@ static void print_help(void) {
 }
 
 static void print_version(void) {
-    printf("%s\n", "Notes 0.1.4");
+    printf("%s\n", "Notes 0.1.5");
 }
 
 static void cleanup(struct note *stn) {
