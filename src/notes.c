@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <dirent.h>
+#include <unistd.h>
 
 #include "config.h"
 #include "utilities.h"
@@ -15,17 +16,16 @@
 #define SIZE_HUN 100
 #define TMP_NM_SLICE 5
 
-// TODO Improve error messages. // Done
-// TODO Add comments to functions.
-// TODO Use getopt to parse command line arguments.
+// TODO Use getopt to parse command line arguments. // Done
+// TODO Refactor.
 
 enum request_type {
     NO_REQUEST,
     QUICK_WRITE,
     WRITE_NOTE,
     READ_NOTE,
-    LIST_NOTES_FILES,
     USE_TEMPLATE,
+    LIST_NOTES_FILES,
     SAVE_TEMPLATE,
     PRINT_HELP,
     PRINT_VERSION,
@@ -56,6 +56,7 @@ struct note {
     char *buffer;
 };
 
+static void parse_args(struct request *req, int argc, char *argv[]);
 static void controller(struct request *req);
 static void write_handler(struct note *stn);
 static void read_note(struct note *stn);
@@ -73,66 +74,107 @@ static void cleanup(struct note *stn);
 int main(int argc, char *argv[]) {
     struct request req;
 
-    req.filename = "temp.txt";
-    req.template_filename = "template.txt";
-
-    if (argc == 1) {
-        req.rt = WRITE_NOTE;
-    } else if (argc == 2) {
-        if (strcmp(argv[1], "-e") == 0) {
-            req.rt = READ_NOTE;
-        } else if (strcmp(argv[1], "-l") == 0) {
-            req.rt = LIST_NOTES_FILES;
-        } else if (strcmp(argv[1], "-t") == 0) { 
-            req.rt = USE_TEMPLATE;
-        } else if (strcmp(argv[1], "-st") == 0) {
-            req.rt = SAVE_TEMPLATE; 
-        } else if (strcmp(argv[1], "-h") == 0) {
-            req.rt = PRINT_HELP;
-        } else if (strcmp(argv[1], "--version") == 0) {
-            req.rt = PRINT_VERSION;
-        } else {
-            req.rt = WRITE_NOTE;
-            req.filename = argv[1];
-        }
-    } else if (argc == 3) {
-        if (strcmp(argv[1], "-e") == 0) {
-            req.rt = READ_NOTE;
-            req.filename = argv[2];
-        } else if (strcmp(argv[1], "-n") == 0) {
-            req.rt = QUICK_WRITE;
-            req.buffer = argv[2];
-        } else if (strcmp(argv[1], "-t") == 0) {
-            req.rt = USE_TEMPLATE;
-            req.template_filename = argv[2];
-        } else if (strcmp(argv[2], "-t") == 0) {
-            req.rt = USE_TEMPLATE;
-            req.filename = argv[1];
-        } else if (strcmp(argv[1], "-st") == 0) {
-            req.rt = SAVE_TEMPLATE;
-            req.template_filename = argv[2];
-        }  else {
-            req.rt = PRINT_HELP;
-        }
-    } else if (argc == 4) {
-        if (strcmp(argv[2], "-t") == 0) {
-            req.rt = USE_TEMPLATE;
-            req.filename = argv[1];
-            req.template_filename = argv[3];
-        } else if (strcmp(argv[2], "-n") == 0) {
-            req.rt = QUICK_WRITE;
-            req.filename = argv[1];
-            req.buffer = argv[3];
-        } else {
-            req.rt = PRINT_HELP;
-        }
-    } else {
-        req.rt = PRINT_HELP;
-    }
-
+    parse_args(&req, argc, argv);
     controller(&req);
 
     return 0;
+}
+
+static void parse_args(struct request *req, int argc, char *argv[]) {
+    int ch, i, index;
+    bool request_set = false;
+    bool request_err = false;
+
+    req->rt = NO_REQUEST;
+    req->filename = "temp.txt";
+    req->template_filename = "template.txt";
+
+    opterr = 0;
+
+    while ((ch = getopt(argc, argv, "n:e:s:t:lvh")) != -1) {
+        if (request_set) {
+            request_err = true;
+            continue;
+        }
+
+        switch(ch) {
+            case 'n':
+                req->rt = QUICK_WRITE;
+                req->buffer = optarg;
+                break;
+            case 'e':
+                req->rt = READ_NOTE;
+                req->filename = optarg;
+                break;
+            case 's':
+                req->rt = SAVE_TEMPLATE;
+                req->template_filename = optarg;
+                break;
+            case 't':
+                req->rt = USE_TEMPLATE;
+                req->template_filename = optarg;
+                break;
+            case 'l':
+                req->rt = LIST_NOTES_FILES;
+                break;
+            case 'v':
+                req->rt = PRINT_VERSION;
+                break;
+            case 'h':
+                req->rt = PRINT_HELP;
+                break;
+            case '?':
+                if (optopt == 'e') {
+                    req->rt = READ_NOTE;
+                } else if (optopt == 's') {
+                    req->rt = SAVE_TEMPLATE;
+                } else if (optopt == 't') {
+                    req->rt = USE_TEMPLATE;
+                } else if (optopt == 'n') {
+                    terminate("Error: Option -%c requires an argument.\n", optopt);
+                } else if (isprint(optopt)) {
+                    terminate("Error: Unknown option '-%c'.\n", optopt);
+                } else {
+                    terminate("Error: Unkown option character '\\x%x'.\n", optopt);
+                }
+                break;
+            default:
+                terminate("%s", "Error: Couldn't parse the program's arguments.\n");
+        }
+
+        request_set = true;
+    }
+
+    if (req->rt == NO_REQUEST) {
+        req->rt = WRITE_NOTE;
+    }
+
+    i = 0;
+    for (index = optind; index < argc; index++) {
+        if (i == 0) {
+            req->filename = argv[index];
+        } else {
+            request_err = true;
+        }
+        i++;
+    }
+
+    switch (req->rt) {
+        case LIST_NOTES_FILES:
+        case SAVE_TEMPLATE:
+        case PRINT_HELP:
+        case PRINT_VERSION:
+            if (i > 0) {
+                request_err = true;
+            }
+            break;
+        default:
+            break;
+    }
+
+    if (request_err) {
+        terminate("%s", "Error: Invalid option or argument.\n");
+    }
 }
 
 static void controller(struct request *req) {
@@ -491,18 +533,18 @@ static void print_help(void) {
         "-e filename:          Open the file for editing. If filename is missing, temp file is opened.\n" 
         "-l:                   List all the notes files in the notes directory.\n"
         "filename -n \"note\":   Add the note to the file. If filename is missing, temp file is used.\n"
-        "-st template_name:    Create or update a template file in templates directory. If no file is\n"
+        "-s template_name:     Create or update a template file in templates directory. If no file is\n"
         "                      Specified template.txt is opened.\n"
         "filename -t template: Add a note using a template. If filename is missing, temp file is used.\n"
         "                      If template name is not provided, \"templates/template.txt\" is used.\n"
-        "--version:            Print version number.\n"
+        "-v:                   Print version number.\n"
         "-h:                   Print this help message.\n";
 
     printf("%s", help_msg);
 }
 
 static void print_version(void) {
-    printf("%s\n", "Notes 0.1.3");
+    printf("%s\n", "Notes 0.1.4");
 }
 
 static void cleanup(struct note *stn) {
