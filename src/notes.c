@@ -19,7 +19,7 @@
 // TODO Use getopt to parse command line arguments. // Done
 // TODO Add option to list all the templates. // Done
 // TODO Add comments to the project. // src/notes.c comments are done
-// TODO Add option to disable date formatting.
+// TODO Add option to disable adding date to note. // Done
 // TODO Add a config file parser.
 // TODO Support custom date formatting.
 // TODO Refactor.
@@ -50,6 +50,7 @@ struct request {
     char *filename;
     char *template_filename;
     char *buffer;
+    bool write_date;
 };
 
 struct note {
@@ -60,6 +61,7 @@ struct note {
     char *template_filename;
     char *tmpf_path;
     char *buffer;
+    bool write_date;
 };
 
 static void parse_args(struct request *req, int argc, char *argv[]);
@@ -100,53 +102,86 @@ static void parse_args(struct request *req, int argc, char *argv[]) {
     req->rt = NO_REQUEST;
     req->filename = "temp.txt";
     req->template_filename = "template.txt";
+    req->write_date = true;
 
     opterr = 0;
 
-    // "n" requires an argument. For "est" arguments are optional. lLvh do not require
+    // "n" requires an argument. For "est" arguments are optional. "lLvhd" do not require
     // any arguments.
-    while ((ch = getopt(argc, argv, "n:e:s:t:lLvh")) != -1) {
-        // If request_set skip all the additional options
-        if (request_set) {
-            continue;
-        }
-
+    while ((ch = getopt(argc, argv, "n:e:s:t:lLvhd")) != -1) {
         switch(ch) {
             case 'n':
-                req->rt = QUICK_WRITE;
-                req->buffer = optarg;
+                if (!request_set) {
+                    req->rt = QUICK_WRITE;
+                    req->buffer = optarg;
+                    request_set = true;
+                }
                 break;
             case 'e':
-                req->rt = READ_NOTE;
-                req->filename = optarg;
+                if (!request_set) {
+                    req->rt = QUICK_WRITE;
+                    req->rt = READ_NOTE;
+                    req->filename = optarg;
+                    request_set = true;
+                }
                 break;
             case 's':
-                req->rt = SAVE_TEMPLATE;
-                req->template_filename = optarg;
+                if (!request_set) {
+                    req->rt = QUICK_WRITE;
+                    req->rt = SAVE_TEMPLATE;
+                    req->template_filename = optarg;
+                    request_set = true;
+                }
                 break;
             case 't':
-                req->rt = USE_TEMPLATE;
-                req->template_filename = optarg;
+                if (!request_set) {
+                    req->rt = QUICK_WRITE;
+                    req->rt = USE_TEMPLATE;
+                    req->template_filename = optarg;
+                    request_set = true;
+                }
                 break;
             case 'l':
-                req->rt = LIST_NOTES;
+                if (!request_set) {
+                    req->rt = QUICK_WRITE;
+                    req->rt = LIST_NOTES;
+                    request_set = true;
+                }
                 break;
             case 'L':
-                req->rt = LIST_TEMPLATES;
+                if (!request_set) {
+                    req->rt = QUICK_WRITE;
+                    req->rt = LIST_TEMPLATES;
+                    request_set = true;
+                }
                 break;
             case 'v':
-                req->rt = PRINT_VERSION;
+                if (!request_set) {
+                    req->rt = QUICK_WRITE;
+                    req->rt = PRINT_VERSION;
+                    request_set = true;
+                }
                 break;
             case 'h':
-                req->rt = PRINT_HELP;
+                if (!request_set) {
+                    req->rt = QUICK_WRITE;
+                    req->rt = PRINT_HELP;
+                    request_set = true;
+                }
+                break;
+            case 'd':
+                req->write_date = false;
                 break;
             case '?':
-                if (optopt == 'e') {
+                if (optopt == 'e' && !request_set) {
                     req->rt = READ_NOTE;
-                } else if (optopt == 's') {
+                    request_set = true;
+                } else if (optopt == 's' && !request_set) {
                     req->rt = SAVE_TEMPLATE;
-                } else if (optopt == 't') {
+                    request_set = true;
+                } else if (optopt == 't' && !request_set) {
                     req->rt = USE_TEMPLATE;
+                    request_set = true;
                 } else if (optopt == 'n') {
                     terminate("Error: Option -%c requires an argument.\n", optopt);
                 } else if (isprint(optopt)) {
@@ -158,8 +193,6 @@ static void parse_args(struct request *req, int argc, char *argv[]) {
             default:
                 terminate("%s", "Error: Couldn't parse the program's arguments.\n");
         }
-
-        request_set = true;
     }
 
     // If no option was provided, it must be a WRITE_NOTE request.
@@ -211,6 +244,7 @@ static void controller(struct request *req) {
     stn.filename = req->filename;
     stn.template_filename = req->template_filename;
     stn.buffer = req->buffer;
+    stn.write_date = req->write_date;
 
     switch (req->rt) {
         case QUICK_WRITE:
@@ -567,9 +601,11 @@ static void store_note(struct note *stn) {
     current = time(NULL);
     t = localtime(&current);
 
-    // Build the date string and write it to the file.
-    strftime(date_buffer, sizeof(date_buffer), "%A, %F %H:%M", t);
-    fprintf(write_file, "%s\n", date_buffer);
+    // Build the date string and write it to the file if write_date is true.
+    if (stn->write_date) {
+        strftime(date_buffer, sizeof(date_buffer), "%A, %F %H:%M", t);
+        fprintf(write_file, "%s\n", date_buffer);
+    }
 
     // If the source is a temp file, write the contents from the temp file.
     // If the source is stdin or the command line, write the contents of the buffer. 
@@ -645,6 +681,7 @@ static void print_help(void) {
         "                      Specified template.txt is opened.\n"
         "filename -t template: Add a note using a template. If filename is missing, temp file is used.\n"
         "                      If template name is not provided, \"templates/template.txt\" is used.\n"
+        "-d:                   The date string is not written to the note file.\n"
         "-v:                   Print version number.\n"
         "-h:                   Print this help message.\n";
 
@@ -655,7 +692,7 @@ static void print_help(void) {
  * Prints the version number.
  */
 static void print_version(void) {
-    printf("%s\n", "Notes 0.1.7");
+    printf("%s\n", "Notes 0.1.8");
 }
 
 /*
