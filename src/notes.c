@@ -18,6 +18,7 @@
 
 // TODO Use getopt to parse command line arguments. // Done
 // TODO Add option to list all the templates. // Done
+// TODO Add comments to the project. // src/notes.c comments are done
 // TODO Add option to disable date formatting.
 // TODO Add a config file parser.
 // TODO Support custom date formatting.
@@ -79,24 +80,33 @@ static void cleanup(struct note *stn);
 int main(int argc, char *argv[]) {
     struct request req;
 
+    // Pass the request set by parse_args to the controller that carries out
+    // the operation.
     parse_args(&req, argc, argv);
     controller(&req);
 
     return 0;
 }
 
+/*
+ * Parses the command line arguments to build a request.
+ */
 static void parse_args(struct request *req, int argc, char *argv[]) {
     int ch, i, index;
     bool request_set = false;
     bool request_err = false;
 
+    // Set up the dafaults.
     req->rt = NO_REQUEST;
     req->filename = "temp.txt";
     req->template_filename = "template.txt";
 
     opterr = 0;
 
+    // "n" requires an argument. For "est" arguments are optional. lLvh do not require
+    // any arguments.
     while ((ch = getopt(argc, argv, "n:e:s:t:lLvh")) != -1) {
+        // If request_set skip all the additional options
         if (request_set) {
             continue;
         }
@@ -152,10 +162,13 @@ static void parse_args(struct request *req, int argc, char *argv[]) {
         request_set = true;
     }
 
+    // If no option was provided, it must be a WRITE_NOTE request.
     if (req->rt == NO_REQUEST) {
         req->rt = WRITE_NOTE;
     }
 
+    // Only one non-option argument if valid: filename. If more than 1 non-opton
+    // argument is provided, set the request_err flag.
     i = 0;
     for (index = optind; index < argc; index++) {
         if (i == 0) {
@@ -166,6 +179,7 @@ static void parse_args(struct request *req, int argc, char *argv[]) {
         i++;
     }
 
+    // If an incompatible non-option argument is provided, set the request_err flag.
     switch (req->rt) {
         case LIST_NOTES:
         case LIST_TEMPLATES:
@@ -185,6 +199,10 @@ static void parse_args(struct request *req, int argc, char *argv[]) {
     }
 }
 
+/*
+ * Calls the appropriate function that can complete the request. Frees the resources
+ * in the end.
+ */
 static void controller(struct request *req) {
     struct note stn; 
 
@@ -226,9 +244,14 @@ static void controller(struct request *req) {
             break;
     }
 
+    // Free the resources.
     cleanup(&stn);
 }
 
+/* 
+ * Handles how to the note should be taken. Calls check_write before before
+ * storing the note.
+ */
 static void write_handler(struct note *stn) {
     switch (stn->ns) {
         case NO_SOURCE:
@@ -250,15 +273,21 @@ static void write_handler(struct note *stn) {
     }
 }
 
+/*
+ * Opens the note file in the editor or writes its content to stdout.
+ */
 static void read_note(struct note *stn) {
     FILE *note_fp;
     char *editor, *command, *note_fn;
     int ch;
 
+    // Build the path to the note file.
     note_fn = malloc_wppr(strlen(stn->storage_path) + strlen(stn->filename) + 1, __func__);
     strcpy(note_fn, stn->storage_path);
     strcat(note_fn, stn->filename);
 
+    // If the $EDITOR environment variable is not set, write the note content to stdout.
+    // If environment vairable is set, open the file in the editor.
     editor = getenv("EDITOR");
     if (editor == NULL) {
         note_fp = fopen(note_fn, "r");
@@ -270,11 +299,13 @@ static void read_note(struct note *stn) {
         }
         fclose(note_fp);
     } else {
+        // Build the command string to open an editor.
         command = malloc_wppr(strlen(editor) + strlen(note_fn) + 2, __func__);
         strcpy(command, editor);
         strcat(command, " ");
         strcat(command, note_fn);
 
+        // Open the editor
         system(command);
 
         free(command);
@@ -283,12 +314,16 @@ static void read_note(struct note *stn) {
     free(note_fn);
 }
 
+/*
+ * List the notes files or the templates files according to the request.
+ */
 static void list_files(struct note *stn, int rt) {
     DIR *dp;
     struct dirent *ep;
     char *templ_dir = "templates/";
     char *path = stn->storage_path;
 
+    // If request if to list templates, build the path to the templates directory.
     if (rt == LIST_TEMPLATES) {
         path = malloc_wppr(strlen(stn->storage_path) + strlen(templ_dir) + 1, __func__);
         strcpy(path, stn->storage_path);
@@ -311,14 +346,20 @@ static void list_files(struct note *stn, int rt) {
         closedir(dp);
     }
 
+    // Call free only if the path to template was build.
     if (rt == LIST_TEMPLATES) {
         free(path);
     }
 }
 
+/*
+ * If the $EDITOR environment variable is set, open editor for writing note. Otherwise,
+ * set the note source to stdin and return.
+ */
 static void write_note(struct note *stn) {
     char *tmp_fn, *tmpf_path, *command, *editor, *tmp_str;
 
+    // If the $EDITOR environment variable is not set. Note will be read from stdin.
     tmp_str = getenv("EDITOR");
     if (tmp_str == NULL) {
         stn->ns = FROM_STDIN;
@@ -330,26 +371,33 @@ static void write_note(struct note *stn) {
     editor = malloc_wppr(strlen(tmp_str) + 1, __func__);
     strcpy(editor, tmp_str);
 
+    // Build the path to temp file.
     tmp_fn = tmpnam(NULL);
     tmpf_path = malloc_wppr(strlen(stn->storage_path) + strlen(tmp_fn) + 1, __func__);
     strcpy(tmpf_path, stn->storage_path);
     strcat(tmpf_path, tmp_fn + TMP_NM_SLICE);
 
+    // Build the command string to open an editor.
     command = malloc_wppr(strlen(editor) + strlen(tmpf_path) + 2, __func__);
     strcpy(command, editor);
     strcat(command, " ");
     strcat(command, tmpf_path);
 
+    // Open the editor.
     system(command);
 
     free(editor);
     free(command);
 
+    // Set the note source and the pointer to the temp file path string.
     stn->ns = FROM_FILE;
     stn->tmpf_path = tmpf_path;
     stn->buffer = NULL;
 }
 
+/*
+ * Write the contents of the template to a temp file and open it for editing.
+ */
 static void write_template(struct note *stn) {
     FILE *read_file, *write_file;
     char *template_fpath, *tmp_fn, *tmp_str, *editor, *tmpf_path, *command;
@@ -364,12 +412,14 @@ static void write_template(struct note *stn) {
     editor = malloc_wppr(strlen(tmp_str) + 1, __func__);
     strcpy(editor, tmp_str);
 
+    // Build the path to the template filename.
     template_fpath_size = strlen(stn->storage_path) + strlen(template_dir) + strlen(stn->template_filename) + 1;
     template_fpath = malloc_wppr(template_fpath_size, __func__);
     strcpy(template_fpath, stn->storage_path);
     strcat(template_fpath, template_dir);
     strcat(template_fpath, stn->template_filename);
 
+    // Build the path to a temp file.
     tmp_fn = tmpnam(NULL);
     tmpf_path = malloc_wppr(strlen(stn->storage_path) + strlen(tmp_fn) + 1, __func__);
     strcpy(tmpf_path, stn->storage_path);
@@ -385,6 +435,7 @@ static void write_template(struct note *stn) {
         terminate("%s", "Error: temp file could not be opened for writing.\n");
     }
 
+    // Write the contents of the template file to the temporary file.
     while ((ch = fgetc(read_file)) != EOF) {
         fputc(ch, write_file);
     }
@@ -392,20 +443,26 @@ static void write_template(struct note *stn) {
     fclose(write_file);
     fclose(read_file);
 
+    // Build the command string to open an editor.
     command = malloc_wppr(strlen(editor) + strlen(tmpf_path) + 2, __func__);
     strcpy(command, editor);
     strcat(command, " ");
     strcat(command, tmpf_path);
 
+    // Open the editor.
     system(command);
 
     free(editor);
     free(template_fpath);
     free(command);
 
+    // Store the pointer to the temp file path in the note struct.
     stn->tmpf_path = tmpf_path;
 }
 
+/*
+ * Create a new template file or update an existing one.
+ */
 static void save_template(struct note *stn) {
     char *template_fpath, *tmp_str, *editor, *command, *template_dir = "templates/";
     int template_fpath_size;
@@ -419,24 +476,30 @@ static void save_template(struct note *stn) {
     editor = malloc_wppr(strlen(tmp_str) + 1, __func__);
     strcpy(editor, tmp_str);
 
+    // Build the path to the template directory.
     template_fpath_size = strlen(stn->storage_path) + strlen(template_dir) + strlen(stn->template_filename) + 1;
     template_fpath = malloc_wppr(template_fpath_size, __func__);
     strcpy(template_fpath, stn->storage_path);
     strcat(template_fpath, template_dir);
 
+    // Create the templates directory is not present.
     if (stat(template_fpath, &st) == -1) {
         if (mkdir(template_fpath, 0700) != 0) {
             terminate("%s", "Error: template folder could not be created\n");
         }
     }
 
+    // Build the path to the template filename.
     strcat(template_fpath, stn->template_filename);
 
+    // Build the command string to pass to system. The command string contains the editor name and
+    // the path to the template file. Example "vim /home/john/documents/notes/templates/template.txt".
     command = malloc_wppr(strlen(editor) + strlen(template_fpath) + 2, __func__);
     strcpy(command, editor);
     strcat(command, " ");
     strcat(command, template_fpath);
 
+    // Open the editor.
     system(command);
 
     free(editor);
@@ -444,12 +507,18 @@ static void save_template(struct note *stn) {
     free(command);
 }
 
+/*
+ * If the contents of the temp file or the buffer only contains space characters
+ * check_write sets the write_error flag in struct note passed.
+ */
 static void check_write(struct note *stn) {
     FILE *read_file;
     int ch, i = 0;
 
     stn->write_error = true;
 
+    // If the source is a file, check the contents of the file.
+    // If the source is stdin or command line, check the buffer.
     if (stn->ns == FROM_FILE || stn->ns == FROM_TEMPLATE) {
         read_file = fopen(stn->tmpf_path, "r");
         if (read_file == NULL) {
@@ -475,6 +544,9 @@ static void check_write(struct note *stn) {
     }
 }
 
+/*
+ * Read the note from a file or buffer and append it to the note file specified.
+ */
 static void store_note(struct note *stn) {
     FILE *read_file, *write_file;
     char *notef_path, date_buffer[100];
@@ -482,6 +554,7 @@ static void store_note(struct note *stn) {
     time_t current;
     struct tm *t;
 
+    // Build the path to the note file.
     notef_path = malloc_wppr(strlen(stn->storage_path) + strlen(stn->filename) + 1, __func__);
     strcpy(notef_path, stn->storage_path);
     strcat(notef_path, stn->filename);
@@ -494,9 +567,12 @@ static void store_note(struct note *stn) {
     current = time(NULL);
     t = localtime(&current);
 
+    // Build the date string and write it to the file.
     strftime(date_buffer, sizeof(date_buffer), "%A, %F %H:%M", t);
     fprintf(write_file, "%s\n", date_buffer);
 
+    // If the source is a temp file, write the contents from the temp file.
+    // If the source is stdin or the command line, write the contents of the buffer. 
     if (stn->ns == FROM_FILE || stn->ns == FROM_TEMPLATE) {
         read_file = fopen(stn->tmpf_path, "r");
         if (read_file == NULL) {
@@ -521,6 +597,9 @@ static void store_note(struct note *stn) {
     free(notef_path);
 }
 
+/*
+ * Read the note from the stdin and store it in a buffer.
+ */
 static char *read_stdin(void) {
     char *buffer;
     int ch, i = 0, size = SIZE_HUN;
@@ -532,6 +611,8 @@ static char *read_stdin(void) {
     while ((ch = getchar()) != '\n' && ch != EOF) {
         if (i < size) {
             buffer[i++] = ch;
+
+            // Double the size and call realloc.
             if (i == size - 2) {
                 size *= 2;
 
@@ -549,6 +630,9 @@ static char *read_stdin(void) {
     return buffer;
 }
 
+/*
+ * Prints out all the supported command line options and arguments.
+ */ 
 static void print_help(void) {
     char *help_msg = 
         "The following options are supported:\n\n"
@@ -567,11 +651,19 @@ static void print_help(void) {
     printf("%s", help_msg);
 }
 
+/*
+ * Prints the version number.
+ */
 static void print_version(void) {
-    printf("%s\n", "Notes 0.1.6");
+    printf("%s\n", "Notes 0.1.7");
 }
 
+/*
+ * Frees the resources according to the usage.
+ */
 static void cleanup(struct note *stn) {
+    // Free the temp file path if note souce was a file. If the source was stdin, clear the
+    // buffer.
     if (stn->ns == FROM_FILE || stn->ns == FROM_TEMPLATE) {
         if (!stn->write_error) {
             remove(stn->tmpf_path);
