@@ -17,6 +17,10 @@
 #define TMP_NM_SLICE 5
 
 // TODO Use getopt to parse command line arguments. // Done
+// TODO Add option to list all the templates. // Done
+// TODO Add option to disable date formatting.
+// TODO Add a config file parser.
+// TODO Support custom date formatting.
 // TODO Refactor.
 
 enum request_type {
@@ -25,7 +29,8 @@ enum request_type {
     WRITE_NOTE,
     READ_NOTE,
     USE_TEMPLATE,
-    LIST_NOTES_FILES,
+    LIST_NOTES,
+    LIST_TEMPLATES,
     SAVE_TEMPLATE,
     PRINT_HELP,
     PRINT_VERSION,
@@ -60,7 +65,7 @@ static void parse_args(struct request *req, int argc, char *argv[]);
 static void controller(struct request *req);
 static void write_handler(struct note *stn);
 static void read_note(struct note *stn);
-static void list_notes_files(struct note *stn);
+static void list_files(struct note *stn, int rt);
 static void write_note(struct note *stn);
 static void write_template(struct note *stn);
 static void save_template(struct note *stn);
@@ -91,9 +96,8 @@ static void parse_args(struct request *req, int argc, char *argv[]) {
 
     opterr = 0;
 
-    while ((ch = getopt(argc, argv, "n:e:s:t:lvh")) != -1) {
+    while ((ch = getopt(argc, argv, "n:e:s:t:lLvh")) != -1) {
         if (request_set) {
-            request_err = true;
             continue;
         }
 
@@ -115,7 +119,10 @@ static void parse_args(struct request *req, int argc, char *argv[]) {
                 req->template_filename = optarg;
                 break;
             case 'l':
-                req->rt = LIST_NOTES_FILES;
+                req->rt = LIST_NOTES;
+                break;
+            case 'L':
+                req->rt = LIST_TEMPLATES;
                 break;
             case 'v':
                 req->rt = PRINT_VERSION;
@@ -160,7 +167,8 @@ static void parse_args(struct request *req, int argc, char *argv[]) {
     }
 
     switch (req->rt) {
-        case LIST_NOTES_FILES:
+        case LIST_NOTES:
+        case LIST_TEMPLATES:
         case SAVE_TEMPLATE:
         case PRINT_HELP:
         case PRINT_VERSION:
@@ -204,8 +212,9 @@ static void controller(struct request *req) {
         case READ_NOTE:
             read_note(&stn);
             break;
-        case LIST_NOTES_FILES:
-            list_notes_files(&stn);
+        case LIST_NOTES:
+        case LIST_TEMPLATES:
+            list_files(&stn, req->rt);
             break;
         case PRINT_HELP:
             print_help();
@@ -274,22 +283,36 @@ static void read_note(struct note *stn) {
     free(note_fn);
 }
 
-static void list_notes_files(struct note *stn) {
+static void list_files(struct note *stn, int rt) {
     DIR *dp;
     struct dirent *ep;
+    char *templ_dir = "templates/";
+    char *path = stn->storage_path;
 
-    dp = opendir(stn->storage_path);
+    if (rt == LIST_TEMPLATES) {
+        path = malloc_wppr(strlen(stn->storage_path) + strlen(templ_dir) + 1, __func__);
+        strcpy(path, stn->storage_path);
+        strcat(path, templ_dir);
+    }
+
+    dp = opendir(path);
 
     if (dp == NULL) {
         perror("Error: notes directory could not be opened.\n");
     } else {
         while ((ep = readdir(dp))) {
-            if (strcmp(ep->d_name, ".") != 0 && strcmp(ep->d_name, "..") != 0) {
+            if (strcmp(ep->d_name, ".") != 0
+                    && strcmp(ep->d_name, "..") != 0
+                    && strcmp (ep->d_name, "templates") != 0) {
                 puts(ep->d_name);
             }
         }
 
         closedir(dp);
+    }
+
+    if (rt == LIST_TEMPLATES) {
+        free(path);
     }
 }
 
@@ -532,6 +555,7 @@ static void print_help(void) {
         "filename:             Append a note to the file specified.\n"
         "-e filename:          Open the file for editing. If filename is missing, temp file is opened.\n" 
         "-l:                   List all the notes files in the notes directory.\n"
+        "-L:                   List all the templates in the templates directory.\n"
         "filename -n \"note\":   Add the note to the file. If filename is missing, temp file is used.\n"
         "-s template_name:     Create or update a template file in templates directory. If no file is\n"
         "                      Specified template.txt is opened.\n"
@@ -544,7 +568,7 @@ static void print_help(void) {
 }
 
 static void print_version(void) {
-    printf("%s\n", "Notes 0.1.5");
+    printf("%s\n", "Notes 0.1.6");
 }
 
 static void cleanup(struct note *stn) {
