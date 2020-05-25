@@ -1,12 +1,14 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <ctype.h>
 #include <stdbool.h>
+#include <string.h>
+#include <ctype.h>
 
 #define BUFFER_INIT_SIZE 100
 
 void parse(FILE *fp);
 void parse_line(char *buffer);
+void check_ident(char *ident);
 
 int main(void) {
     FILE *fp;
@@ -57,13 +59,9 @@ void parse(FILE *fp) {
                 parse_line(buffer);
             }
 
+            i = 0;
             line_ch_read = false;
             skip_line = false;
-
-            i = 0;
-            if (buffer == NULL) {
-                fprintf(stderr, "Error: malloc failed in parse.\n");
-            }
         }
     }
 
@@ -73,6 +71,8 @@ void parse(FILE *fp) {
 void parse_line(char *buffer) {
     int ch, i = 0, j = 0;
     char word_buffer[100];
+    char *ident;
+    char *value;
 
     bool ident_read = false;
     bool assign_read = false;
@@ -84,15 +84,17 @@ void parse_line(char *buffer) {
             if (!isspace(ch) && ch != '=') {
                 word_buffer[j++] = ch;
             } else {
-                ident_read = true;
-
                 if (ch == '=') {
                     assign_read = true;
                 }
 
                 if (j > 0) {
+                    ident_read = true;
                     word_buffer[j] = '\0';
-                    printf("ident: %s\n", word_buffer);
+                    ident = strdup(word_buffer);
+                    if (ident == NULL) {
+                        fprintf(stderr, "Error: strdup failed in parse line.\n");
+                    }
                     j = 0;
                 }
             }
@@ -110,10 +112,46 @@ void parse_line(char *buffer) {
                 if (j > 0) {
                     value_read = true;
                     word_buffer[j] = '\0';
-                    printf("value: %s\n", word_buffer);
+                    value = strdup(word_buffer);
+                    if (value == NULL) {
+                        fprintf(stderr, "Error: strdup failed in parse line.\n");
+                    }
                 }
                 break;
             } 
         }
     }
+
+    if (ident_read && value_read) {
+        check_ident(ident);
+    } else {
+        fprintf(stderr, "Error: ident or value could not be read successfully.\n");
+    }
+
+    if (ident_read) {
+        free(ident);
+    }
+
+    if (value_read) {
+        free(value);
+    }
+}
+
+void check_ident(char *ident) {
+    char *ident_list[] = {
+        "$EDITOR",
+        "$NOTES_DIR",
+        "$DATE_FMT"
+    };
+
+    int list_size = sizeof(ident_list) / sizeof(ident_list[0]);
+
+    for (int i = 0; i < list_size; i++) {
+        if (strcmp(ident, ident_list[i]) == 0) {
+            printf("Ident %s is valid.\n", ident);
+            return;
+        }
+    }
+
+    printf("Ident %s is not valid.\n", ident);
 }
