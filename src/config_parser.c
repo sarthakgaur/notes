@@ -6,22 +6,42 @@
 
 #define BUFFER_INIT_SIZE 100
 
-void parse(FILE *fp);
-void parse_line(char *buffer);
-void check_ident(char *ident);
+// TODO Refactor.
+
+struct idents {
+    char *editor;
+    char *notes_dir;
+    char *date_fmt;
+    bool parse_err;
+};
+
+void parse_controller(void);
+void parse_file(struct idents *sti, FILE *fp);
+void parse_line(struct idents *sti, char *buffer);
+void store_ident_val(struct idents *sti, char *ident, char *value);
+void cleanup(struct idents *sti);
 
 int main(void) {
-    FILE *fp;
-
-    fp = fopen("dump/config", "r");
-    parse(fp);
-
-    fclose(fp);
-
+    parse_controller();
     return 0;
 }
 
-void parse(FILE *fp) {
+void parse_controller(void) {
+    FILE *fp;
+    struct idents sti;
+
+    sti.editor = NULL;
+    sti.notes_dir = NULL;
+    sti.date_fmt = NULL;
+
+    fp = fopen("dump/config", "r");
+    parse_file(&sti, fp);
+
+    fclose(fp);
+    cleanup(&sti);
+}
+
+void parse_file(struct idents *sti, FILE *fp) {
     int ch, size, i = 0;
     char *buffer;
     bool line_ch_read = false;
@@ -56,7 +76,7 @@ void parse(FILE *fp) {
             buffer[i] = '\0';
 
             if (line_ch_read) {
-                parse_line(buffer);
+                parse_line(sti, buffer);
             }
 
             i = 0;
@@ -68,9 +88,9 @@ void parse(FILE *fp) {
     free(buffer);
 }
 
-void parse_line(char *buffer) {
+void parse_line(struct idents *sti, char *buffer) {
     int ch, i = 0, j = 0;
-    char word_buffer[100];
+    char token_buffer[100];
     char *ident;
     char *value;
 
@@ -82,7 +102,7 @@ void parse_line(char *buffer) {
     while ((ch = buffer[i++]) != '\0') {
         if (!ident_read) {
             if (!isspace(ch) && ch != '=') {
-                word_buffer[j++] = ch;
+                token_buffer[j++] = ch;
             } else {
                 if (ch == '=') {
                     assign_read = true;
@@ -90,10 +110,11 @@ void parse_line(char *buffer) {
 
                 if (j > 0) {
                     ident_read = true;
-                    word_buffer[j] = '\0';
-                    ident = strdup(word_buffer);
+                    token_buffer[j] = '\0';
+                    ident = strdup(token_buffer);
                     if (ident == NULL) {
                         fprintf(stderr, "Error: strdup failed in parse line.\n");
+                        exit(EXIT_FAILURE);
                     }
                     j = 0;
                 }
@@ -106,52 +127,69 @@ void parse_line(char *buffer) {
             if (isspace(ch) && !reading_value) {
                 continue;
             } if (ch != '\n') {
-                word_buffer[j++] = ch;
+                token_buffer[j++] = ch;
                 reading_value = true;
             } else {
                 if (j > 0) {
                     value_read = true;
-                    word_buffer[j] = '\0';
-                    value = strdup(word_buffer);
+                    token_buffer[j] = '\0';
+                    value = strdup(token_buffer);
                     if (value == NULL) {
                         fprintf(stderr, "Error: strdup failed in parse line.\n");
+                        exit(EXIT_FAILURE);
                     }
+                    break;
                 }
-                break;
             } 
         }
     }
 
     if (ident_read && value_read) {
-        check_ident(ident);
+        store_ident_val(sti, ident, value);
     } else {
         fprintf(stderr, "Error: ident or value could not be read successfully.\n");
-    }
+        sti->parse_err = true;
 
-    if (ident_read) {
-        free(ident);
-    }
+        if (ident_read) {
+            free(ident);
+        }
 
-    if (value_read) {
-        free(value);
-    }
-}
-
-void check_ident(char *ident) {
-    char *ident_list[] = {
-        "$EDITOR",
-        "$NOTES_DIR",
-        "$DATE_FMT"
-    };
-
-    int list_size = sizeof(ident_list) / sizeof(ident_list[0]);
-
-    for (int i = 0; i < list_size; i++) {
-        if (strcmp(ident, ident_list[i]) == 0) {
-            printf("Ident %s is valid.\n", ident);
-            return;
+        if (value_read) {
+            free(value);
         }
     }
-
-    printf("Ident %s is not valid.\n", ident);
 }
+
+void store_ident_val(struct idents *sti, char *ident, char *val) {
+    if (strcmp(ident, "$EDITOR") == 0 && sti->editor == NULL) {
+        sti->editor = val;
+    } else if (strcmp(ident, "$NOTES_DIR") == 0 && sti->notes_dir == NULL) {
+        sti->notes_dir = val;
+    } else if (strcmp(ident, "$DATE_FMT") == 0 && sti->date_fmt == NULL) {
+        sti->date_fmt = val;
+    } else {
+        fprintf(stderr, "Error: ident used multiple times.\n");
+        sti->parse_err = true;
+        free(val);
+    }
+
+    free(ident);
+}
+
+void cleanup(struct idents *sti) {
+    if (sti->editor != NULL) {
+        printf("$EDITOR = %s\n", sti->editor);
+        free(sti->editor);
+    }
+
+    if (sti->notes_dir != NULL) {
+        printf("$NOTES_DIR = %s\n", sti->notes_dir);
+        free(sti->notes_dir);
+    }
+
+    if (sti->date_fmt != NULL) {
+        printf("$DATE_FMT = %s\n", sti->date_fmt);
+        free(sti->date_fmt);
+    }
+}
+
