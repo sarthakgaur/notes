@@ -17,11 +17,24 @@ struct idents {
     bool parse_err;
 };
 
+struct line_info {
+    char *ident;
+    char *value;
+    char *token_buffer;
+    int storage_status;
+    bool ident_read;
+    bool assign_read;
+    bool reading_value;
+    bool value_read;
+    bool pair_complete;
+};
+
 void parse_controller(void);
 void parse_file(struct idents *sti, FILE *fp);
 void parse_line(struct idents *sti, char *buffer);
+void line_cleanup(struct line_info *stli);
 int store_ident_val(struct idents *sti, char *ident, char *value);
-void cleanup(struct idents *sti);
+void parse_cleanup(struct idents *sti);
 
 int main(void) {
     parse_controller();
@@ -40,7 +53,7 @@ void parse_controller(void) {
     parse_file(&sti, fp);
 
     fclose(fp);
-    cleanup(&sti);
+    parse_cleanup(&sti);
 }
 
 void parse_file(struct idents *sti, FILE *fp) {
@@ -50,10 +63,7 @@ void parse_file(struct idents *sti, FILE *fp) {
     bool skip_line = false;
 
     size = BUFFER_INIT_SIZE;
-    buffer = malloc(BUFFER_INIT_SIZE);
-    if (buffer == NULL) {
-        terminate("%s", "Error: malloc failed in parse.\n");
-    }
+    buffer = malloc_wppr(size, __func__);
 
     while ((ch = fgetc(fp)) != EOF) {
         if (isspace(ch) && !line_ch_read && !skip_line) {
@@ -91,69 +101,88 @@ void parse_file(struct idents *sti, FILE *fp) {
 }
 
 void parse_line(struct idents *sti, char *buffer) {
-    int ch, res = 0, i = 0, j = 0;
-    char token_buffer[100], *ident, *value;
-    bool ident_read, assign_read, reading_value, value_read;
+    int ch, i = 0, j = 0, size = BUFFER_INIT_SIZE;
+    struct line_info stli;
 
-    ident_read = assign_read = reading_value = value_read = false;
+    stli.ident_read = stli.assign_read = stli.reading_value = \
+    stli.value_read = stli.pair_complete = false;
+
+    stli.token_buffer = malloc_wppr(size, __func__);
 
     while ((ch = buffer[i++]) != '\0') {
-        if (!ident_read) {
+        if (!stli.ident_read) {
             if (!isspace(ch) && ch != '=') {
-                token_buffer[j++] = ch;
+                stli.token_buffer[j++] = ch;
             } else {
                 if (ch == '=') {
-                    assign_read = true;
+                    stli.assign_read = true;
                 }
 
                 if (j > 0) {
-                    ident_read = true;
-                    token_buffer[j] = '\0';
-                    ident = strdup(token_buffer);
-                    if (ident == NULL) {
+                    stli.ident_read = true;
+                    stli.token_buffer[j] = '\0';
+                    stli.ident = strdup(stli.token_buffer);
+                    if (stli.ident == NULL) {
                         terminate("%s", "Error: strdup failed in parse line.\n");
                     }
                     j = 0;
                 }
             }
-        } else if (!assign_read && ch == '=') {
-            assign_read = true;
+        } else if (!stli.assign_read && ch == '=') {
+            stli.assign_read = true;
         } else {
-            if (isspace(ch) && !reading_value) {
+            if (isspace(ch) && !stli.reading_value) {
                 continue;
             } else if (ch != '\n') {
-                token_buffer[j++] = ch;
-                reading_value = true;
+                stli.token_buffer[j++] = ch;
+                stli.reading_value = true;
             } else if (j > 0) {
-                value_read = true;
-                token_buffer[j] = '\0';
-                value = strdup(token_buffer);
-                if (value == NULL) {
-                    terminate("%s", "Error: strdup failed in parse line.\n");
+                stli.value_read = true;
+                stli.token_buffer[j] = '\0';
+                stli.value = strdup(stli.token_buffer);
+                if (stli.value == NULL) {
+                    terminate("%s", "Error: strdup failed in parse_line.\n");
                 }
                 break;
             } 
         }
+
+        if (j == size - 1) {
+            size *= 2;
+            stli.token_buffer = realloc(stli.token_buffer, size);
+            if (stli.token_buffer == NULL) {
+                terminate("%s", "Error: realloc failed in pare_line.\n");
+            }
+        }
     }
 
-    if (ident_read && value_read) {
-        res = store_ident_val(sti, ident, value);
-
-        if (res == 1) {
-            free(value);
-        }
+    if (stli.ident_read && stli.value_read) {
+        stli.storage_status = store_ident_val(sti, stli.ident, stli.value);
+        stli.pair_complete = true;
     } else {
         fprintf(stderr, "Error: ident or value could not be read successfully.\n");
         sti->parse_err = true;
+    }
 
-        if (value_read) {
-            free(value);
+    line_cleanup(&stli);
+}
+
+void line_cleanup(struct line_info *stli) {
+    if (!stli->pair_complete) {
+        if (stli->value_read) {
+            free(stli->value);
         }
     }
 
-    if (ident_read) {
-        free(ident);
+    if (stli->storage_status == 1) {
+        free(stli->value);
     }
+
+    if (stli->ident_read) {
+        free(stli->ident);
+    }
+
+    free(stli->token_buffer);
 }
 
 int store_ident_val(struct idents *sti, char *ident, char *val) {
@@ -172,7 +201,7 @@ int store_ident_val(struct idents *sti, char *ident, char *val) {
     return 0;
 }
 
-void cleanup(struct idents *sti) {
+void parse_cleanup(struct idents *sti) {
     if (sti->editor != NULL) {
         printf("$EDITOR = %s\n", sti->editor);
         free(sti->editor);
