@@ -32,8 +32,9 @@ struct line_info {
 void parse_controller(void);
 void parse_file(struct idents *sti, FILE *fp);
 void parse_line(struct idents *sti, char *buffer);
-void line_cleanup(struct line_info *stli);
+int parse_str_val(struct line_info *stli);
 int store_ident_val(struct idents *sti, char *ident, char *value);
+void line_cleanup(struct line_info *stli);
 void parse_cleanup(struct idents *sti);
 
 int main(void) {
@@ -50,6 +51,10 @@ void parse_controller(void) {
     sti.date_fmt = NULL;
 
     fp = fopen("dump/config", "r");
+    if (fp == NULL) {
+        terminate("%s", "Error: can't open the config file.\n");
+    }
+
     parse_file(&sti, fp);
 
     fclose(fp);
@@ -156,7 +161,7 @@ void parse_line(struct idents *sti, char *buffer) {
         }
     }
 
-    if (stli.ident_read && stli.value_read) {
+    if (stli.ident_read && stli.value_read && parse_str_val(&stli) == 0) {
         stli.storage_status = store_ident_val(sti, stli.ident, stli.value);
         stli.pair_complete = true;
     } else {
@@ -165,6 +170,62 @@ void parse_line(struct idents *sti, char *buffer) {
     }
 
     line_cleanup(&stli);
+}
+
+int parse_str_val(struct line_info *stli) {
+    int len, i, end_space_count = 0;
+    char ch, *val_buffer;
+
+    if (stli->value[0] != '"') {
+        return 1;
+    }
+
+    len = strlen(stli->value);
+    val_buffer = malloc_wppr(len + 1, __func__);
+
+    i = len - 1;
+    while ((ch = stli->value[i--]) == ' ') {
+        end_space_count++;
+    }
+
+    i = 1;
+    while ((ch = stli->value[i]) != '"' && ch != '\0') {
+        val_buffer[i - 1] = ch;
+        i++;
+    }
+
+    if (ch == '"') {
+        val_buffer[i - 1] = '\0';
+    } else {
+        free(val_buffer);
+        return 1;
+    }
+
+    if (strlen(val_buffer) == (long unsigned int) (len - end_space_count - 2)) {
+        free(stli->value);
+        stli->value = val_buffer;
+    } else {
+        free(val_buffer);
+        return 1;
+    }
+
+    return 0;
+}
+
+int store_ident_val(struct idents *sti, char *ident, char *val) {
+    if (strcmp(ident, "$EDITOR") == 0 && sti->editor == NULL) {
+        sti->editor = val;
+    } else if (strcmp(ident, "$NOTES_DIR") == 0 && sti->notes_dir == NULL) {
+        sti->notes_dir = val;
+    } else if (strcmp(ident, "$DATE_FMT") == 0 && sti->date_fmt == NULL) {
+        sti->date_fmt = val;
+    } else {
+        fprintf(stderr, "Error: ident used multiple times or unknown ident used.\n");
+        sti->parse_err = true;
+        return 1;
+    }
+
+    return 0;
 }
 
 void line_cleanup(struct line_info *stli) {
@@ -183,22 +244,6 @@ void line_cleanup(struct line_info *stli) {
     }
 
     free(stli->token_buffer);
-}
-
-int store_ident_val(struct idents *sti, char *ident, char *val) {
-    if (strcmp(ident, "$EDITOR") == 0 && sti->editor == NULL) {
-        sti->editor = val;
-    } else if (strcmp(ident, "$NOTES_DIR") == 0 && sti->notes_dir == NULL) {
-        sti->notes_dir = val;
-    } else if (strcmp(ident, "$DATE_FMT") == 0 && sti->date_fmt == NULL) {
-        sti->date_fmt = val;
-    } else {
-        fprintf(stderr, "Error: ident used multiple times or unknown ident used.\n");
-        sti->parse_err = true;
-        return 1;
-    }
-
-    return 0;
 }
 
 void parse_cleanup(struct idents *sti) {
