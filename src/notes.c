@@ -20,7 +20,7 @@
 // TODO Add option to list all the templates. // Done
 // TODO Add comments to the project. // src/notes.c comments are done
 // TODO Add option to disable adding date to note. // Done
-// TODO Add a config file parser.
+// TODO Add a config file parser. // Done
 // TODO Support custom date formatting.
 // TODO Refactor.
 
@@ -77,7 +77,7 @@ static void store_note(struct note *stn);
 static char *read_stdin(void);
 static void print_help(void);
 static void print_version(void);
-static void cleanup(struct note *stn);
+static void cleanup(struct note *stn, struct idents *sti);
 
 int main(int argc, char *argv[]) {
     struct request req;
@@ -238,9 +238,12 @@ static void parse_args(struct request *req, int argc, char *argv[]) {
  */
 static void controller(struct request *req) {
     struct note stn; 
+    struct idents sti;
+
+    read_config(&sti);
 
     stn.ns = NO_SOURCE;
-    stn.storage_path = read_config();
+    stn.storage_path = sti.notes_dir;
     stn.filename = req->filename;
     stn.template_filename = req->template_filename;
     stn.buffer = req->buffer;
@@ -279,7 +282,7 @@ static void controller(struct request *req) {
     }
 
     // Free the resources.
-    cleanup(&stn);
+    cleanup(&stn, &sti);
 }
 
 /* 
@@ -692,13 +695,13 @@ static void print_help(void) {
  * Prints the version number.
  */
 static void print_version(void) {
-    printf("%s\n", "Notes 0.1.8");
+    printf("%s\n", "Notes 0.1.9");
 }
 
 /*
  * Frees the resources according to the usage.
  */
-static void cleanup(struct note *stn) {
+static void cleanup(struct note *stn, struct idents *sti) {
     // Free the temp file path if note souce was a file. If the source was stdin, clear the
     // buffer.
     if (stn->ns == FROM_FILE || stn->ns == FROM_TEMPLATE) {
@@ -710,7 +713,20 @@ static void cleanup(struct note *stn) {
         free(stn->buffer);
     }
 
-    free(stn->storage_path);
+    if (sti->editor != NULL) {
+        printf("$EDITOR = %s\n", sti->editor);
+        free(sti->editor);
+    }
+
+    if (sti->notes_dir != NULL) {
+        printf("$NOTES_DIR = %s\n", sti->notes_dir);
+        free(sti->notes_dir);
+    }
+
+    if (sti->date_fmt != NULL) {
+        printf("$DATE_FMT = %s\n", sti->date_fmt);
+        free(sti->date_fmt);
+    }
 
     if (stn->write_error) {
         terminate("%s", "Error: write error occured.\n");
