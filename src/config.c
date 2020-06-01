@@ -15,8 +15,9 @@ char *read_config(void) {
     int str_len;
 
     tmp_str = getenv("HOME");
-    if (tmp_str == NULL)
+    if (tmp_str == NULL) {
         terminate("%s", "environment variable HOME not available.\n");
+    }
     home_str = malloc_wppr(strlen(tmp_str) + 1, __func__);
     strcpy(home_str, tmp_str);
 
@@ -27,8 +28,9 @@ char *read_config(void) {
         str_len = strlen(tmp_str);
         storage_path = malloc_wppr(str_len + 2, __func__);
         strcpy(storage_path, tmp_str);
-        if (storage_path[str_len - 1] != '/')
+        if (storage_path[str_len - 1] != '/') {
             strcat(storage_path, "/");
+        }
     }
 
     storage_path = build_storage(home_str, storage_path);
@@ -49,9 +51,11 @@ static char *build_storage(char *home_str, char *storage_path) {
 
     struct stat st = {0};
 
-    if (stat(storage_path, &st) == -1)
-        if (mkdir(storage_path, 0700) != 0)
+    if (stat(storage_path, &st) == -1) {
+        if (mkdir(storage_path, 0700) != 0) {
             terminate("%s", "storage folder could not be created\n");
+        }
+    }
 
     return storage_path;
 }
