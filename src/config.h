@@ -8,6 +8,6 @@ struct config {
     bool parse_err;
 };
 
-void read_config(struct idents *sti);
+void read_config(struct config *conf);
 
 #endif

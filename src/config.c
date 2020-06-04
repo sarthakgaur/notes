@@ -25,15 +25,15 @@ struct line_info {
     bool pair_complete;
 };
 
-static void build_storage(char *home_str, struct idents *sti);
-static void parse_controller(struct idents *sti, char *home_str);
-static void parse_file(struct idents *sti, FILE *fp);
-static void parse_line(struct idents *sti, char *buffer);
+static void build_storage(char *home_str, struct config *conf);
+static void parse_controller(struct config *conf, char *home_str);
+static void parse_file(struct config *conf, FILE *fp);
+static void parse_line(struct config *conf, char *buffer);
 static int parse_str_val(struct line_info *stli);
-static int store_ident_val(struct idents *sti, char *ident, char *value);
+static int store_ident_val(struct config *conf, char *ident, char *value);
 static void line_cleanup(struct line_info *stli);
 
-void read_config(struct idents *sti) {
+void read_config(struct config *conf) {
     char *home_str, *tmp_str;
     int str_len;
 
@@ -44,53 +44,63 @@ void read_config(struct idents *sti) {
     home_str = malloc_wppr(strlen(tmp_str) + 1, __func__);
     strcpy(home_str, tmp_str);
 
-    parse_controller(sti, home_str);
+    parse_controller(conf, home_str);
 
     tmp_str = getenv("NOTES_DIR");
     if (tmp_str != NULL) {
         str_len = strlen(tmp_str);
-        sti->notes_dir = realloc(sti->notes_dir, str_len + 2);
-        if (sti->notes_dir == NULL) {
+        conf->notes_dir = realloc(conf->notes_dir, str_len + 2);
+        if (conf->notes_dir == NULL) {
             terminate("%s", "Error: realloc failed in read_config.\n");
         }
-        strcpy(sti->notes_dir, tmp_str);
-        if (sti->notes_dir[str_len - 1] != '/') {
-            strcat(sti->notes_dir, "/");
+        strcpy(conf->notes_dir, tmp_str);
+        if (conf->notes_dir[str_len - 1] != '/') {
+            strcat(conf->notes_dir, "/");
         }
     }
 
-    build_storage(home_str, sti);
+    tmp_str = getenv("EDITOR");
+    if (tmp_str != NULL) {
+        str_len = strlen(tmp_str);
+        conf->editor = realloc(conf->editor, str_len + 2);
+        if (conf->editor == NULL) {
+            terminate("%s", "Error: realloc failed in read_config.\n");
+        }
+        strcpy(conf->editor, tmp_str);
+    }
+
+    build_storage(home_str, conf);
 
     free(home_str);
 }
 
-static void build_storage(char *home_str, struct idents *sti) {
+static void build_storage(char *home_str, struct config *conf) {
     char *storage_dn = "/notes/";
 
-    if (sti->notes_dir == NULL) {
-        sti->notes_dir = malloc_wppr(strlen(home_str) + strlen(storage_dn) + 1, __func__);
-        strcpy(sti->notes_dir, home_str);
-        strcat(sti->notes_dir, storage_dn);
+    if (conf->notes_dir == NULL) {
+        conf->notes_dir = malloc_wppr(strlen(home_str) + strlen(storage_dn) + 1, __func__);
+        strcpy(conf->notes_dir, home_str);
+        strcat(conf->notes_dir, storage_dn);
     }
 
     struct stat st = {0};
 
-    if (stat(sti->notes_dir, &st) == -1) {
-        if (mkdir(sti->notes_dir, 0700) != 0) {
+    if (stat(conf->notes_dir, &st) == -1) {
+        if (mkdir(conf->notes_dir, 0700) != 0) {
             terminate("%s", "storage folder could not be created\n");
         }
     }
 }
 
-static void parse_controller(struct idents *sti, char *home_str) {
+static void parse_controller(struct config *conf, char *home_str) {
     char *complete_config_path, *config_path = "/.config/notes/config";
     int path_len;
     FILE *fp;
 
-    sti->editor = NULL;
-    sti->notes_dir = NULL;
-    sti->date_fmt = NULL;
-    sti->parse_err = false;
+    conf->editor = NULL;
+    conf->notes_dir = NULL;
+    conf->date_fmt = NULL;
+    conf->parse_err = false;
 
     path_len = strlen(home_str) + strlen(config_path) + 1;
     complete_config_path = malloc_wppr(path_len, __func__);
@@ -99,18 +109,17 @@ static void parse_controller(struct idents *sti, char *home_str) {
 
     fp = fopen(complete_config_path, "r");
     if (fp == NULL) {
-        sti->parse_err = true;
+        conf->parse_err = true;
     } else {
-        parse_file(sti, fp);
+        parse_file(conf, fp);
 
         fclose(fp);
-        // parse_cleanup(&sti);
     }
 
     free(complete_config_path);
 }
 
-static void parse_file(struct idents *sti, FILE *fp) {
+static void parse_file(struct config *conf, FILE *fp) {
     int ch, size, i = 0;
     char *buffer;
     bool line_ch_read = false;
@@ -142,7 +151,7 @@ static void parse_file(struct idents *sti, FILE *fp) {
             buffer[i] = '\0';
 
             if (line_ch_read) {
-                parse_line(sti, buffer);
+                parse_line(conf, buffer);
             }
 
             i = 0;
@@ -154,7 +163,7 @@ static void parse_file(struct idents *sti, FILE *fp) {
     free(buffer);
 }
 
-static void parse_line(struct idents *sti, char *buffer) {
+static void parse_line(struct config *conf, char *buffer) {
     int ch, i = 0, j = 0, size = BUFFER_INIT_SIZE;
     struct line_info stli;
 
@@ -211,11 +220,11 @@ static void parse_line(struct idents *sti, char *buffer) {
     }
 
     if (stli.ident_read && stli.value_read && parse_str_val(&stli) == 0) {
-        stli.storage_status = store_ident_val(sti, stli.ident, stli.value);
+        stli.storage_status = store_ident_val(conf, stli.ident, stli.value);
         stli.pair_complete = true;
     } else {
         fprintf(stderr, "Error: ident or value could not be read successfully.\n");
-        sti->parse_err = true;
+        conf->parse_err = true;
     }
 
     line_cleanup(&stli);
@@ -261,16 +270,16 @@ static int parse_str_val(struct line_info *stli) {
     return 0;
 }
 
-static int store_ident_val(struct idents *sti, char *ident, char *val) {
-    if (strcmp(ident, "$EDITOR") == 0 && sti->editor == NULL) {
-        sti->editor = val;
-    } else if (strcmp(ident, "$NOTES_DIR") == 0 && sti->notes_dir == NULL) {
-        sti->notes_dir = val;
-    } else if (strcmp(ident, "$DATE_FMT") == 0 && sti->date_fmt == NULL) {
-        sti->date_fmt = val;
+static int store_ident_val(struct config *conf, char *ident, char *val) {
+    if (strcmp(ident, "$EDITOR") == 0 && conf->editor == NULL) {
+        conf->editor = val;
+    } else if (strcmp(ident, "$NOTES_DIR") == 0 && conf->notes_dir == NULL) {
+        conf->notes_dir = val;
+    } else if (strcmp(ident, "$DATE_FMT") == 0 && conf->date_fmt == NULL) {
+        conf->date_fmt = val;
     } else {
         fprintf(stderr, "Error: ident used multiple times or unknown ident used.\n");
-        sti->parse_err = true;
+        conf->parse_err = true;
         return 1;
     }
 

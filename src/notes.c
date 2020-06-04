@@ -16,14 +16,9 @@
 #define SIZE_HUN 100
 #define TMP_NM_SLICE 5
 
-// TODO Use getopt to parse command line arguments. // Done
-// TODO Add option to list all the templates. // Done
-// TODO Add comments to the project. // src/notes.c comments are done
-// TODO Add option to disable adding date to note. // Done
-// TODO Add a config file parser. // Done
-// TODO Support custom date formatting. // Done
-// TODO $EDITOR identifier in config. // Done
-// TODO Refactor.
+// TODO Refactor. // Done
+// TODO Write comments for config file.
+// TODO Make a database that stores the parsed values.
 
 enum request_type {
     NO_REQUEST,
@@ -55,7 +50,7 @@ struct request {
 };
 
 struct note {
-    struct request *rq;
+    struct request *req;
     struct config *conf;
     enum note_source ns;
     bool write_error;
@@ -67,7 +62,7 @@ static void parse_args(struct request *req, int argc, char *argv[]);
 static void controller(struct request *req);
 static void write_handler(struct note *stn);
 static void read_note(struct note *stn);
-static void list_files(struct note *stn, int rt);
+static void list_files(struct note *stn);
 static void write_note(struct note *stn);
 static void write_template(struct note *stn);
 static void save_template(struct note *stn);
@@ -76,7 +71,7 @@ static void store_note(struct note *stn);
 static char *read_stdin(void);
 static void print_help(void);
 static void print_version(void);
-static void cleanup(struct note *stn, struct idents *sti);
+static void cleanup(struct note *stn);
 
 int main(int argc, char *argv[]) {
     struct request req;
@@ -237,18 +232,14 @@ static void parse_args(struct request *req, int argc, char *argv[]) {
  */
 static void controller(struct request *req) {
     struct note stn; 
-    struct idents sti;
+    struct config conf;
 
-    read_config(&sti);
+    read_config(&conf);
 
     stn.ns = NO_SOURCE;
-    stn.storage_path = sti.notes_dir;
-    stn.filename = req->filename;
-    stn.template_filename = req->template_filename;
-    stn.buffer = req->buffer;
-    stn.write_date = req->write_date;
-    stn.date_fmt = sti.date_fmt;
-    stn.editor = sti.editor;
+    stn.req = req;
+    stn.conf = &conf;
+    stn.write_error = false;
 
     switch (req->rt) {
         case QUICK_WRITE:
@@ -270,7 +261,7 @@ static void controller(struct request *req) {
             break;
         case LIST_NOTES:
         case LIST_TEMPLATES:
-            list_files(&stn, req->rt);
+            list_files(&stn);
             break;
         case PRINT_HELP:
             print_help();
@@ -283,7 +274,7 @@ static void controller(struct request *req) {
     }
 
     // Free the resources.
-    cleanup(&stn, &sti);
+    cleanup(&stn);
 }
 
 /* 
@@ -320,13 +311,13 @@ static void read_note(struct note *stn) {
     int ch;
 
     // Build the path to the note file.
-    note_fn = malloc_wppr(strlen(stn->storage_path) + strlen(stn->filename) + 1, __func__);
-    strcpy(note_fn, stn->storage_path);
-    strcat(note_fn, stn->filename);
+    note_fn = malloc_wppr(strlen(stn->conf->notes_dir) + strlen(stn->req->filename) + 1, __func__);
+    strcpy(note_fn, stn->conf->notes_dir);
+    strcat(note_fn, stn->req->filename);
 
     // If the $EDITOR environment variable is not set, write the note content to stdout.
     // If environment vairable is set, open the file in the editor.
-    editor = getenv("EDITOR");
+    editor = stn->conf->editor;
     if (editor == NULL) {
         note_fp = fopen(note_fn, "r");
         if (note_fp == NULL) {
@@ -355,16 +346,16 @@ static void read_note(struct note *stn) {
 /*
  * List the notes files or the templates files according to the request.
  */
-static void list_files(struct note *stn, int rt) {
+static void list_files(struct note *stn) {
     DIR *dp;
     struct dirent *ep;
     char *templ_dir = "templates/";
-    char *path = stn->storage_path;
+    char *path = stn->conf->notes_dir;
 
     // If request if to list templates, build the path to the templates directory.
-    if (rt == LIST_TEMPLATES) {
-        path = malloc_wppr(strlen(stn->storage_path) + strlen(templ_dir) + 1, __func__);
-        strcpy(path, stn->storage_path);
+    if (stn->req->rt == LIST_TEMPLATES) {
+        path = malloc_wppr(strlen(stn->conf->notes_dir) + strlen(templ_dir) + 1, __func__);
+        strcpy(path, stn->conf->notes_dir);
         strcat(path, templ_dir);
     }
 
@@ -385,7 +376,7 @@ static void list_files(struct note *stn, int rt) {
     }
 
     // Call free only if the path to template was build.
-    if (rt == LIST_TEMPLATES) {
+    if (stn->req->rt == LIST_TEMPLATES) {
         free(path);
     }
 }
@@ -398,7 +389,7 @@ static void write_note(struct note *stn) {
     char *tmp_fn, *tmpf_path, *command, *editor, *tmp_str;
 
     // If the $EDITOR environment variable is not set. Note will be read from stdin.
-    tmp_str = stn->editor;
+    tmp_str = stn->conf->editor;
     if (tmp_str == NULL) {
         stn->ns = FROM_STDIN;
         stn->tmpf_path = NULL;
@@ -411,8 +402,8 @@ static void write_note(struct note *stn) {
 
     // Build the path to temp file.
     tmp_fn = tmpnam(NULL);
-    tmpf_path = malloc_wppr(strlen(stn->storage_path) + strlen(tmp_fn) + 1, __func__);
-    strcpy(tmpf_path, stn->storage_path);
+    tmpf_path = malloc_wppr(strlen(stn->conf->notes_dir) + strlen(tmp_fn) + 1, __func__);
+    strcpy(tmpf_path, stn->conf->notes_dir);
     strcat(tmpf_path, tmp_fn + TMP_NM_SLICE);
 
     // Build the command string to open an editor.
@@ -451,16 +442,18 @@ static void write_template(struct note *stn) {
     strcpy(editor, tmp_str);
 
     // Build the path to the template filename.
-    template_fpath_size = strlen(stn->storage_path) + strlen(template_dir) + strlen(stn->template_filename) + 1;
+    template_fpath_size = strlen(stn->conf->notes_dir)
+                            + strlen(template_dir)
+                            + strlen(stn->req->template_filename) + 1;
     template_fpath = malloc_wppr(template_fpath_size, __func__);
-    strcpy(template_fpath, stn->storage_path);
+    strcpy(template_fpath, stn->conf->notes_dir);
     strcat(template_fpath, template_dir);
-    strcat(template_fpath, stn->template_filename);
+    strcat(template_fpath, stn->req->template_filename);
 
     // Build the path to a temp file.
     tmp_fn = tmpnam(NULL);
-    tmpf_path = malloc_wppr(strlen(stn->storage_path) + strlen(tmp_fn) + 1, __func__);
-    strcpy(tmpf_path, stn->storage_path);
+    tmpf_path = malloc_wppr(strlen(stn->conf->notes_dir) + strlen(tmp_fn) + 1, __func__);
+    strcpy(tmpf_path, stn->conf->notes_dir);
     strcat(tmpf_path, tmp_fn + TMP_NM_SLICE);
 
     read_file = fopen(template_fpath, "r");
@@ -515,9 +508,11 @@ static void save_template(struct note *stn) {
     strcpy(editor, tmp_str);
 
     // Build the path to the template directory.
-    template_fpath_size = strlen(stn->storage_path) + strlen(template_dir) + strlen(stn->template_filename) + 1;
+    template_fpath_size = strlen(stn->conf->notes_dir)
+                            + strlen(template_dir)
+                            + strlen(stn->req->template_filename) + 1;
     template_fpath = malloc_wppr(template_fpath_size, __func__);
-    strcpy(template_fpath, stn->storage_path);
+    strcpy(template_fpath, stn->conf->notes_dir);
     strcat(template_fpath, template_dir);
 
     // Create the templates directory is not present.
@@ -528,7 +523,7 @@ static void save_template(struct note *stn) {
     }
 
     // Build the path to the template filename.
-    strcat(template_fpath, stn->template_filename);
+    strcat(template_fpath, stn->req->template_filename);
 
     // Build the command string to pass to system. The command string contains the editor name and
     // the path to the template file. Example "vim /home/john/documents/notes/templates/template.txt".
@@ -552,6 +547,11 @@ static void save_template(struct note *stn) {
 static void check_write(struct note *stn) {
     FILE *read_file;
     int ch, i = 0;
+    char *buffer = stn->buffer;
+
+    if (stn->ns == FROM_CMDLINE) {
+        buffer = stn->req->buffer;
+    }
 
     stn->write_error = true;
 
@@ -573,7 +573,7 @@ static void check_write(struct note *stn) {
 
         fclose(read_file);
     } else if (stn->ns == FROM_STDIN || stn->ns == FROM_CMDLINE) {
-        while ((ch = stn->buffer[i++]) != '\0') {
+        while ((ch = buffer[i++]) != '\0') {
             if (!isspace(ch)) {
                 stn->write_error = false;
                 break;
@@ -587,16 +587,21 @@ static void check_write(struct note *stn) {
  */
 static void store_note(struct note *stn) {
     FILE *read_file, *write_file;
-    char *notef_path, date_buffer[100];
+    char *notef_path, date_buffer[100], *buffer = stn->buffer;;
     char *date_fmt = "%A, %F %H:%M";
-    int ch, i = 0;
+    int ch, notef_path_len, i = 0;
     time_t current;
     struct tm *t;
 
+    if (stn->ns == FROM_CMDLINE) {
+        buffer = stn->req->buffer;
+    }
+
     // Build the path to the note file.
-    notef_path = malloc_wppr(strlen(stn->storage_path) + strlen(stn->filename) + 1, __func__);
-    strcpy(notef_path, stn->storage_path);
-    strcat(notef_path, stn->filename);
+    notef_path_len = strlen(stn->conf->notes_dir) + strlen(stn->req->filename) + 1;
+    notef_path = malloc_wppr(notef_path_len, __func__);
+    strcpy(notef_path, stn->conf->notes_dir);
+    strcat(notef_path, stn->req->filename);
 
     write_file = fopen(notef_path, "a");
     if (write_file == NULL) {
@@ -607,9 +612,9 @@ static void store_note(struct note *stn) {
     t = localtime(&current);
 
     // Build the date string and write it to the file if write_date is true.
-    if (stn->write_date) {
-        if (stn->date_fmt != NULL) {
-            date_fmt = stn->date_fmt;
+    if (stn->req->write_date) {
+        if (stn->conf->date_fmt != NULL) {
+            date_fmt = stn->conf->date_fmt;
         }
 
         strftime(date_buffer, sizeof(date_buffer), date_fmt, t);
@@ -630,7 +635,7 @@ static void store_note(struct note *stn) {
 
         fclose(read_file);
     } else if (stn->ns == FROM_STDIN || stn->ns == FROM_CMDLINE) {
-        while ((ch = stn->buffer[i++]) != '\0') {
+        while ((ch = buffer[i++]) != '\0') {
             fputc(ch, write_file);
         }
         fputc('\n', write_file);
@@ -701,13 +706,13 @@ static void print_help(void) {
  * Prints the version number.
  */
 static void print_version(void) {
-    printf("%s\n", "Notes 0.2.0");
+    printf("%s\n", "Notes 0.2.1");
 }
 
 /*
  * Frees the resources according to the usage.
  */
-static void cleanup(struct note *stn, struct idents *sti) {
+static void cleanup(struct note *stn) {
     // Free the temp file path if note souce was a file. If the source was stdin, clear the
     // buffer.
     if (stn->ns == FROM_FILE || stn->ns == FROM_TEMPLATE) {
@@ -719,19 +724,19 @@ static void cleanup(struct note *stn, struct idents *sti) {
         free(stn->buffer);
     }
 
-    if (sti->editor != NULL) {
-        printf("$EDITOR = %s\n", sti->editor);
-        free(sti->editor);
+    if (stn->conf->editor != NULL) {
+        // printf("$EDITOR = %s\n", stn->conf->editor);
+        free(stn->conf->editor);
     }
 
-    if (sti->notes_dir != NULL) {
-        printf("$NOTES_DIR = %s\n", sti->notes_dir);
-        free(sti->notes_dir);
+    if (stn->conf->notes_dir != NULL) {
+        // printf("$NOTES_DIR = %s\n", stn->conf->notes_dir);
+        free(stn->conf->notes_dir);
     }
 
-    if (sti->date_fmt != NULL) {
-        printf("$DATE_FMT = %s\n", sti->date_fmt);
-        free(sti->date_fmt);
+    if (stn->conf->date_fmt != NULL) {
+        // printf("$DATE_FMT = %s\n", stn->conf->date_fmt);
+        free(stn->conf->date_fmt);
     }
 
     if (stn->write_error) {
