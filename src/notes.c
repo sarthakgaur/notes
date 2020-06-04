@@ -21,7 +21,8 @@
 // TODO Add comments to the project. // src/notes.c comments are done
 // TODO Add option to disable adding date to note. // Done
 // TODO Add a config file parser. // Done
-// TODO Support custom date formatting.
+// TODO Support custom date formatting. // Done
+// TODO $EDITOR identifier in config. // Done
 // TODO Refactor.
 
 enum request_type {
@@ -59,8 +60,10 @@ struct note {
     char *storage_path;
     char *filename;
     char *template_filename;
+    char *editor;
     char *tmpf_path;
     char *buffer;
+    char *date_fmt;
     bool write_date;
 };
 
@@ -248,6 +251,8 @@ static void controller(struct request *req) {
     stn.template_filename = req->template_filename;
     stn.buffer = req->buffer;
     stn.write_date = req->write_date;
+    stn.date_fmt = sti.date_fmt;
+    stn.editor = sti.editor;
 
     switch (req->rt) {
         case QUICK_WRITE:
@@ -397,7 +402,7 @@ static void write_note(struct note *stn) {
     char *tmp_fn, *tmpf_path, *command, *editor, *tmp_str;
 
     // If the $EDITOR environment variable is not set. Note will be read from stdin.
-    tmp_str = getenv("EDITOR");
+    tmp_str = stn->editor;
     if (tmp_str == NULL) {
         stn->ns = FROM_STDIN;
         stn->tmpf_path = NULL;
@@ -587,6 +592,7 @@ static void check_write(struct note *stn) {
 static void store_note(struct note *stn) {
     FILE *read_file, *write_file;
     char *notef_path, date_buffer[100];
+    char *date_fmt = "%A, %F %H:%M";
     int ch, i = 0;
     time_t current;
     struct tm *t;
@@ -606,7 +612,11 @@ static void store_note(struct note *stn) {
 
     // Build the date string and write it to the file if write_date is true.
     if (stn->write_date) {
-        strftime(date_buffer, sizeof(date_buffer), "%A, %F %H:%M", t);
+        if (stn->date_fmt != NULL) {
+            date_fmt = stn->date_fmt;
+        }
+
+        strftime(date_buffer, sizeof(date_buffer), date_fmt, t);
         fprintf(write_file, "%s\n", date_buffer);
     }
 
