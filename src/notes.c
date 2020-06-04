@@ -55,16 +55,12 @@ struct request {
 };
 
 struct note {
+    struct request *rq;
+    struct config *conf;
     enum note_source ns;
     bool write_error;
-    char *storage_path;
-    char *filename;
-    char *template_filename;
-    char *editor;
     char *tmpf_path;
     char *buffer;
-    char *date_fmt;
-    bool write_date;
 };
 
 static void parse_args(struct request *req, int argc, char *argv[]);
@@ -705,7 +701,7 @@ static void print_help(void) {
  * Prints the version number.
  */
 static void print_version(void) {
-    printf("%s\n", "Notes 0.1.9");
+    printf("%s\n", "Notes 0.2.0");
 }
 
 /*

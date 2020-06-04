@@ -1,7 +1,7 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-struct idents {
+struct config {
     char *editor;
     char *notes_dir;
     char *date_fmt;
