@@ -706,7 +706,7 @@ static void print_help(void) {
  * Prints the version number.
  */
 static void print_version(void) {
-    printf("%s\n", "Notes 0.2.1");
+    printf("%s\n", "Notes 0.2.2");
 }
 
 /*

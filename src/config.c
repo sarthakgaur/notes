@@ -119,6 +119,9 @@ static void parse_controller(struct config *conf, char *home_str) {
     free(complete_config_path);
 }
 
+/*
+ * Parse the config file and send each line to parse_line for further parsing
+ */
 static void parse_file(struct config *conf, FILE *fp) {
     int ch, size, i = 0;
     char *buffer;
@@ -128,6 +131,12 @@ static void parse_file(struct config *conf, FILE *fp) {
     size = BUFFER_INIT_SIZE;
     buffer = malloc_wppr(size, __func__);
 
+    // All the preceding space in the line is ignored. If '#' character is reached the 
+    // rest of the line is skiped.
+    //
+    // The skip_line is checked in the first condition because of a special case. If the
+    // skip_line check was not present and line contained only a '#' character, it will skip
+    // the newline test at bottom.
     while ((ch = fgetc(fp)) != EOF) {
         if (isspace(ch) && !line_ch_read && !skip_line) {
             continue;
@@ -137,6 +146,7 @@ static void parse_file(struct config *conf, FILE *fp) {
             line_ch_read = true;
             buffer[i++] = ch;
 
+            // If threshold is reached increase buffer size.
             if (i == size - 2) {
                 size *= 2;
                 buffer = realloc(buffer, size);
@@ -146,6 +156,9 @@ static void parse_file(struct config *conf, FILE *fp) {
             }
         }
 
+        // If end of line is reached, store the line feed and null character at the end
+        // and send the line for parsing if something is read. Set the flags and 'i' to the
+        // default values.
         if (ch == '\n') {
             buffer[i++] = ch;
             buffer[i] = '\0';
@@ -163,6 +176,10 @@ static void parse_file(struct config *conf, FILE *fp) {
     free(buffer);
 }
 
+/*
+ * Parse the line provided into identifier and value, and send them for storage if they
+ * are valid.
+ */
 static void parse_line(struct config *conf, char *buffer) {
     int ch, i = 0, j = 0, size = BUFFER_INIT_SIZE;
     struct line_info stli;
@@ -172,6 +189,11 @@ static void parse_line(struct config *conf, char *buffer) {
 
     stli.token_buffer = malloc_wppr(size, __func__);
 
+    // Store the identifier in sti.ident and value in sti.value. All the spaces preceding
+    // and following the identified are ignored. However, only spaces preceding value are
+    // ignored. Full value parsing happens in parse_str_val.
+    // Example format:
+    // $EDITOR = "vim"
     while ((ch = buffer[i++]) != '\0') {
         if (!stli.ident_read) {
             if (!isspace(ch) && ch != '=') {
@@ -210,6 +232,7 @@ static void parse_line(struct config *conf, char *buffer) {
             } 
         }
 
+        // If threshold is reached increase buffer size.
         if (j == size - 1) {
             size *= 2;
             stli.token_buffer = realloc(stli.token_buffer, size);
@@ -219,6 +242,7 @@ static void parse_line(struct config *conf, char *buffer) {
         }
     }
 
+    // Store only when all the values are present and parse_str_val return 0.
     if (stli.ident_read && stli.value_read && parse_str_val(&stli) == 0) {
         stli.storage_status = store_ident_val(conf, stli.ident, stli.value);
         stli.pair_complete = true;
@@ -230,10 +254,14 @@ static void parse_line(struct config *conf, char *buffer) {
     line_cleanup(&stli);
 }
 
+/*
+ * Parse the value part of the pair. Return 0 if successful, 1 otherwise.
+ */
 static int parse_str_val(struct line_info *stli) {
     int len, i, end_space_count = 0;
     char ch, *val_buffer;
 
+    // Return if doesn't start with a quote
     if (stli->value[0] != '"') {
         return 1;
     }
@@ -241,6 +269,8 @@ static int parse_str_val(struct line_info *stli) {
     len = strlen(stli->value);
     val_buffer = malloc_wppr(len + 1, __func__);
 
+    // Count the spaces at the end.
+    // TODO change this to isspace
     i = len - 1;
     while ((ch = stli->value[i--]) == ' ') {
         end_space_count++;
@@ -259,6 +289,8 @@ static int parse_str_val(struct line_info *stli) {
         return 1;
     }
 
+    // Remove the end_space_count from len and 2 for 2 quotes. Then compare it with len
+    // val_buffer
     if (strlen(val_buffer) == (long unsigned int) (len - end_space_count - 2)) {
         free(stli->value);
         stli->value = val_buffer;
@@ -270,7 +302,12 @@ static int parse_str_val(struct line_info *stli) {
     return 0;
 }
 
+/*
+ * Stores the value in struct config. Return 0 if the operation was successful, 1 otherwise.
+ */
 static int store_ident_val(struct config *conf, char *ident, char *val) {
+    // If a value was not present in the struct member, store it. Otherwise, set the parse-err
+    // to true.
     if (strcmp(ident, "$EDITOR") == 0 && conf->editor == NULL) {
         conf->editor = val;
     } else if (strcmp(ident, "$NOTES_DIR") == 0 && conf->notes_dir == NULL) {
@@ -286,13 +323,18 @@ static int store_ident_val(struct config *conf, char *ident, char *val) {
     return 0;
 }
 
+/*
+ * Free the resources used by parse_line.
+ */
 static void line_cleanup(struct line_info *stli) {
+    // If pair is not complete and value is present. Free it.
     if (!stli->pair_complete) {
         if (stli->value_read) {
             free(stli->value);
         }
     }
 
+    // Free stli->value is an error occurred while storing the value in struct config.
     if (stli->storage_status == 1) {
         free(stli->value);
     }
