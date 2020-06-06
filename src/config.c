@@ -33,6 +33,10 @@ static int parse_str_val(struct line_info *stli);
 static int store_ident_val(struct config *conf, char *ident, char *value);
 static void line_cleanup(struct line_info *stli);
 
+/*
+ * Gets the necessary information from the environment or the config file. The precedence
+ * of environment vairables is higher.
+ */
 void read_config(struct config *conf) {
     char *home_str, *tmp_str;
     int str_len;
@@ -74,6 +78,10 @@ void read_config(struct config *conf) {
     free(home_str);
 }
 
+/*
+ * Create a default path to the notes file if not available and create the notes directory
+ * if not already created.
+ */
 static void build_storage(char *home_str, struct config *conf) {
     char *storage_dn = "/notes/";
 
@@ -92,6 +100,9 @@ static void build_storage(char *home_str, struct config *conf) {
     }
 }
 
+/*
+ * Starts the config file parsing by opening the config file and passing it to parse_file
+ */
 static void parse_controller(struct config *conf, char *home_str) {
     char *complete_config_path, *config_path = "/.config/notes/config";
     int path_len;
@@ -131,9 +142,6 @@ static void parse_file(struct config *conf, FILE *fp) {
     size = BUFFER_INIT_SIZE;
     buffer = malloc_wppr(size, __func__);
 
-    // All the preceding space in the line is ignored. If '#' character is reached the 
-    // rest of the line is skiped.
-    //
     // The skip_line is checked in the first condition because of a special case. If the
     // skip_line check was not present and line contained only a '#' character, it will skip
     // the newline test at bottom.
@@ -146,7 +154,6 @@ static void parse_file(struct config *conf, FILE *fp) {
             line_ch_read = true;
             buffer[i++] = ch;
 
-            // If threshold is reached increase buffer size.
             if (i == size - 2) {
                 size *= 2;
                 buffer = realloc(buffer, size);
@@ -156,9 +163,6 @@ static void parse_file(struct config *conf, FILE *fp) {
             }
         }
 
-        // If end of line is reached, store the line feed and null character at the end
-        // and send the line for parsing if something is read. Set the flags and 'i' to the
-        // default values.
         if (ch == '\n') {
             buffer[i++] = ch;
             buffer[i] = '\0';
@@ -167,6 +171,7 @@ static void parse_file(struct config *conf, FILE *fp) {
                 parse_line(conf, buffer);
             }
 
+            // Set the flags and 'i' to the default values.
             i = 0;
             line_ch_read = false;
             skip_line = false;
@@ -232,7 +237,6 @@ static void parse_line(struct config *conf, char *buffer) {
             } 
         }
 
-        // If threshold is reached increase buffer size.
         if (j == size - 1) {
             size *= 2;
             stli.token_buffer = realloc(stli.token_buffer, size);
@@ -289,8 +293,7 @@ static int parse_str_val(struct line_info *stli) {
         return 1;
     }
 
-    // Remove the end_space_count from len and 2 for 2 quotes. Then compare it with len
-    // val_buffer
+    // Remove the end_space_count from len and 2 (for 2 quotes).
     if (strlen(val_buffer) == (long unsigned int) (len - end_space_count - 2)) {
         free(stli->value);
         stli->value = val_buffer;
@@ -306,8 +309,6 @@ static int parse_str_val(struct line_info *stli) {
  * Stores the value in struct config. Return 0 if the operation was successful, 1 otherwise.
  */
 static int store_ident_val(struct config *conf, char *ident, char *val) {
-    // If a value was not present in the struct member, store it. Otherwise, set the parse-err
-    // to true.
     if (strcmp(ident, "$EDITOR") == 0 && conf->editor == NULL) {
         conf->editor = val;
     } else if (strcmp(ident, "$NOTES_DIR") == 0 && conf->notes_dir == NULL) {
@@ -327,7 +328,6 @@ static int store_ident_val(struct config *conf, char *ident, char *val) {
  * Free the resources used by parse_line.
  */
 static void line_cleanup(struct line_info *stli) {
-    // If pair is not complete and value is present. Free it.
     if (!stli->pair_complete) {
         if (stli->value_read) {
             free(stli->value);

@@ -16,8 +16,6 @@
 #define SIZE_HUN 100
 #define TMP_NM_SLICE 5
 
-// TODO Refactor. // Done
-// TODO Write comments for config file.
 // TODO Make a database that stores the parsed values.
 
 enum request_type {
@@ -76,8 +74,6 @@ static void cleanup(struct note *stn);
 int main(int argc, char *argv[]) {
     struct request req;
 
-    // Pass the request set by parse_args to the controller that carries out
-    // the operation.
     parse_args(&req, argc, argv);
     controller(&req);
 
@@ -100,8 +96,7 @@ static void parse_args(struct request *req, int argc, char *argv[]) {
 
     opterr = 0;
 
-    // "n" requires an argument. For "est" arguments are optional. "lLvhd" do not require
-    // any arguments.
+    // "n" requires an argument. For "est" arguments are optional.
     while ((ch = getopt(argc, argv, "n:e:s:t:lLvhd")) != -1) {
         switch(ch) {
             case 'n':
@@ -352,7 +347,6 @@ static void list_files(struct note *stn) {
     char *templ_dir = "templates/";
     char *path = stn->conf->notes_dir;
 
-    // If request if to list templates, build the path to the templates directory.
     if (stn->req->rt == LIST_TEMPLATES) {
         path = malloc_wppr(strlen(stn->conf->notes_dir) + strlen(templ_dir) + 1, __func__);
         strcpy(path, stn->conf->notes_dir);
@@ -375,7 +369,6 @@ static void list_files(struct note *stn) {
         closedir(dp);
     }
 
-    // Call free only if the path to template was build.
     if (stn->req->rt == LIST_TEMPLATES) {
         free(path);
     }
@@ -386,19 +379,18 @@ static void list_files(struct note *stn) {
  * set the note source to stdin and return.
  */
 static void write_note(struct note *stn) {
-    char *tmp_fn, *tmpf_path, *command, *editor, *tmp_str;
+    char *tmp_fn, *tmpf_path, *command, *editor;
 
     // If the $EDITOR environment variable is not set. Note will be read from stdin.
-    tmp_str = stn->conf->editor;
-    if (tmp_str == NULL) {
+    if (stn->conf->editor == NULL) {
         stn->ns = FROM_STDIN;
         stn->tmpf_path = NULL;
         stn->buffer = NULL;
         return;
     }
 
-    editor = malloc_wppr(strlen(tmp_str) + 1, __func__);
-    strcpy(editor, tmp_str);
+    editor = malloc_wppr(strlen(stn->conf->editor) + 1, __func__);
+    strcpy(editor, stn->conf->editor);
 
     // Build the path to temp file.
     tmp_fn = tmpnam(NULL);
@@ -487,7 +479,6 @@ static void write_template(struct note *stn) {
     free(template_fpath);
     free(command);
 
-    // Store the pointer to the temp file path in the note struct.
     stn->tmpf_path = tmpf_path;
 }
 
@@ -525,8 +516,7 @@ static void save_template(struct note *stn) {
     // Build the path to the template filename.
     strcat(template_fpath, stn->req->template_filename);
 
-    // Build the command string to pass to system. The command string contains the editor name and
-    // the path to the template file. Example "vim /home/john/documents/notes/templates/template.txt".
+    // Build the command string to pass to system.
     command = malloc_wppr(strlen(editor) + strlen(template_fpath) + 2, __func__);
     strcpy(command, editor);
     strcat(command, " ");
@@ -611,7 +601,7 @@ static void store_note(struct note *stn) {
     current = time(NULL);
     t = localtime(&current);
 
-    // Build the date string and write it to the file if write_date is true.
+    // Write date to the file if write_date is true. Use custom format if available.
     if (stn->req->write_date) {
         if (stn->conf->date_fmt != NULL) {
             date_fmt = stn->conf->date_fmt;
@@ -621,7 +611,7 @@ static void store_note(struct note *stn) {
         fprintf(write_file, "%s\n", date_buffer);
     }
 
-    // If the source is a temp file, write the contents from the temp file.
+    // If the source is a temp file or template, write the contents from the temp file.
     // If the source is stdin or the command line, write the contents of the buffer. 
     if (stn->ns == FROM_FILE || stn->ns == FROM_TEMPLATE) {
         read_file = fopen(stn->tmpf_path, "r");
@@ -662,7 +652,6 @@ static char *read_stdin(void) {
         if (i < size) {
             buffer[i++] = ch;
 
-            // Double the size and call realloc.
             if (i == size - 2) {
                 size *= 2;
 
@@ -706,15 +695,13 @@ static void print_help(void) {
  * Prints the version number.
  */
 static void print_version(void) {
-    printf("%s\n", "Notes 0.2.2");
+    printf("%s\n", "Notes 0.2.3");
 }
 
 /*
  * Frees the resources according to the usage.
  */
 static void cleanup(struct note *stn) {
-    // Free the temp file path if note souce was a file. If the source was stdin, clear the
-    // buffer.
     if (stn->ns == FROM_FILE || stn->ns == FROM_TEMPLATE) {
         if (!stn->write_error) {
             remove(stn->tmpf_path);
