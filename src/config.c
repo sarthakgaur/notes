@@ -274,9 +274,8 @@ static int parse_str_val(struct line_info *stli) {
     val_buffer = malloc_wppr(len + 1, __func__);
 
     // Count the spaces at the end.
-    // TODO change this to isspace
     i = len - 1;
-    while ((ch = stli->value[i--]) == ' ') {
+    while (isspace(stli->value[i--])) {
         end_space_count++;
     }
 
