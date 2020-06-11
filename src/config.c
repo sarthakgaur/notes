@@ -35,7 +35,7 @@ static void line_cleanup(struct line_info *stli);
 
 /*
  * Gets the necessary information from the environment or the config file. The precedence
- * of environment vairables is higher.
+ * of environment variables is higher.
  */
 void read_config(struct config *conf) {
     char *home_str, *tmp_str;
