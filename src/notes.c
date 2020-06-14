@@ -711,20 +711,9 @@ static void cleanup(struct note *stn) {
         free(stn->buffer);
     }
 
-    if (stn->conf->editor != NULL) {
-        // printf("$EDITOR = %s\n", stn->conf->editor);
-        free(stn->conf->editor);
-    }
-
-    if (stn->conf->notes_dir != NULL) {
-        // printf("$NOTES_DIR = %s\n", stn->conf->notes_dir);
-        free(stn->conf->notes_dir);
-    }
-
-    if (stn->conf->date_fmt != NULL) {
-        // printf("$DATE_FMT = %s\n", stn->conf->date_fmt);
-        free(stn->conf->date_fmt);
-    }
+    // printf("$EDITOR = %s\n", stn->conf->editor);
+    // printf("$NOTES_DIR = %s\n", stn->conf->notes_dir);
+    // printf("$DATE_FMT = %s\n", stn->conf->date_fmt);
 
     if (stn->write_error) {
         terminate("%s", "Error: write error occured.\n");

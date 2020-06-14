@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <ctype.h>
+#include <time.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -10,6 +11,7 @@
 
 #include "config.h"
 #include "utilities.h"
+#include "cache.h"
 
 #define BUFFER_INIT_SIZE 100
 
@@ -38,8 +40,11 @@ static void line_cleanup(struct line_info *stli);
  * of environment variables is higher.
  */
 void read_config(struct config *conf) {
-    char *home_str, *tmp_str;
-    int str_len;
+    char *home_str, *tmp_str, *cache_full_path, *config_full_path;
+    char *config_path = "/.config/notes/config";
+    char *cache_path = "/.cache/notes/cache";
+    int str_len, config_path_len, cache_path_len, cache_status;
+    struct stat attr;
 
     tmp_str = getenv("HOME");
     if (tmp_str == NULL) {
@@ -48,15 +53,34 @@ void read_config(struct config *conf) {
     home_str = malloc_wppr(strlen(tmp_str) + 1, __func__);
     strcpy(home_str, tmp_str);
 
-    parse_controller(conf, home_str);
+    // Build config file path
+    config_path_len = strlen(home_str) + strlen(config_path) + 1;
+    config_full_path = malloc_wppr(config_path_len, __func__);
+    strcpy(config_full_path, home_str);
+    strcat(config_full_path, config_path);
+
+    // Build cache file path
+    cache_path_len = strlen(home_str) + strlen(cache_path) + 1;
+    cache_full_path = malloc_wppr(cache_path_len, __func__);
+    strcpy(cache_full_path, home_str);
+    strcat(cache_full_path, cache_path);
+
+    cache_status = cache_controller(conf, home_str, config_full_path, cache_full_path);
+
+    if (cache_status == 1) {
+        parse_controller(conf, config_full_path);
+        if (conf->parse_err == false) {
+            stat(config_full_path, &attr);
+            conf->cmod_time = attr.st_mtime;
+            write_cache(conf, cache_full_path);
+        } else {
+            fprintf(stderr, "Error: could not successfully parse config file.\n");
+        }
+    }
 
     tmp_str = getenv("NOTES_DIR");
     if (tmp_str != NULL) {
         str_len = strlen(tmp_str);
-        conf->notes_dir = realloc(conf->notes_dir, str_len + 2);
-        if (conf->notes_dir == NULL) {
-            terminate("%s", "Error: realloc failed in read_config.\n");
-        }
         strcpy(conf->notes_dir, tmp_str);
         if (conf->notes_dir[str_len - 1] != '/') {
             strcat(conf->notes_dir, "/");
@@ -66,16 +90,14 @@ void read_config(struct config *conf) {
     tmp_str = getenv("EDITOR");
     if (tmp_str != NULL) {
         str_len = strlen(tmp_str);
-        conf->editor = realloc(conf->editor, str_len + 2);
-        if (conf->editor == NULL) {
-            terminate("%s", "Error: realloc failed in read_config.\n");
-        }
         strcpy(conf->editor, tmp_str);
     }
 
     build_storage(home_str, conf);
 
     free(home_str);
+    free(config_full_path);
+    free(cache_full_path);
 }
 
 /*
@@ -85,8 +107,7 @@ void read_config(struct config *conf) {
 static void build_storage(char *home_str, struct config *conf) {
     char *storage_dn = "/notes/";
 
-    if (conf->notes_dir == NULL) {
-        conf->notes_dir = malloc_wppr(strlen(home_str) + strlen(storage_dn) + 1, __func__);
+    if (conf->notes_dir[0] == '\0') {
         strcpy(conf->notes_dir, home_str);
         strcat(conf->notes_dir, storage_dn);
     }
@@ -103,31 +124,22 @@ static void build_storage(char *home_str, struct config *conf) {
 /*
  * Starts the config file parsing by opening the config file and passing it to parse_file
  */
-static void parse_controller(struct config *conf, char *home_str) {
-    char *complete_config_path, *config_path = "/.config/notes/config";
-    int path_len;
+static void parse_controller(struct config *conf, char *config_full_path) {
     FILE *fp;
 
-    conf->editor = NULL;
-    conf->notes_dir = NULL;
-    conf->date_fmt = NULL;
+    conf->editor[0] = '\0';
+    conf->notes_dir[0] = '\0';
+    conf->date_fmt[0] = '\0';
     conf->parse_err = false;
 
-    path_len = strlen(home_str) + strlen(config_path) + 1;
-    complete_config_path = malloc_wppr(path_len, __func__);
-    strcpy(complete_config_path, home_str);
-    strcat(complete_config_path, config_path);
-
-    fp = fopen(complete_config_path, "r");
+    fp = fopen(config_full_path, "r");
     if (fp == NULL) {
         conf->parse_err = true;
     } else {
+        printf("Parsing file.\n");
         parse_file(conf, fp);
-
         fclose(fp);
     }
-
-    free(complete_config_path);
 }
 
 /*
@@ -308,12 +320,12 @@ static int parse_str_val(struct line_info *stli) {
  * Stores the value in struct config. Return 0 if the operation was successful, 1 otherwise.
  */
 static int store_ident_val(struct config *conf, char *ident, char *val) {
-    if (strcmp(ident, "$EDITOR") == 0 && conf->editor == NULL) {
-        conf->editor = val;
-    } else if (strcmp(ident, "$NOTES_DIR") == 0 && conf->notes_dir == NULL) {
-        conf->notes_dir = val;
-    } else if (strcmp(ident, "$DATE_FMT") == 0 && conf->date_fmt == NULL) {
-        conf->date_fmt = val;
+    if (strcmp(ident, "$EDITOR") == 0 && conf->editor[0] == '\0') {
+        strcpy(conf->editor, val);
+    } else if (strcmp(ident, "$NOTES_DIR") == 0 && conf->notes_dir[0] == '\0') {
+        strcpy(conf->notes_dir, val);
+    } else if (strcmp(ident, "$DATE_FMT") == 0 && conf->date_fmt[0] == '\0') {
+        strcpy(conf->date_fmt, val);
     } else {
         fprintf(stderr, "Error: ident used multiple times or unknown ident used.\n");
         conf->parse_err = true;
