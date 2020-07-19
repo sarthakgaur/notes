@@ -32,6 +32,18 @@ int cache_controller(struct config *conf, char *home_str, char *config_path, cha
     return is_config_updated(config_mtime, cache_mtime);
 }
 
+void write_cache(struct config *conf, char *cache_path) {
+    FILE *config_fptr;
+
+    config_fptr = fopen(cache_path, "wb");
+    if (config_fptr == NULL) {
+        terminate("%s", "Error: Cannot open cache file for writing.\n");
+    }
+
+    fwrite(conf, sizeof(struct config), 1, config_fptr);
+    fclose(config_fptr);
+}
+
 static void build_cache(char *home_str) {
     struct stat st = {0};
     char *cache_dir_path, *cache_path = "/.cache/notes/";
@@ -64,18 +76,6 @@ static int read_cache(struct config *conf, char *cache_path) {
     fclose(config_fptr);
 
     return 0;
-}
-
-void write_cache(struct config *conf, char *cache_path) {
-    FILE *config_fptr;
-
-    config_fptr = fopen(cache_path, "wb");
-    if (config_fptr == NULL) {
-        terminate("%s", "Error: Cannot open cache file for writing.\n");
-    }
-
-    fwrite(conf, sizeof(struct config), 1, config_fptr);
-    fclose(config_fptr);
 }
 
 static int is_config_updated(time_t config_mtime, time_t cache_mtime) {
