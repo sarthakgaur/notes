@@ -16,8 +16,6 @@
 #define SIZE_HUN 100
 #define TMP_NM_SLICE 5
 
-// TODO Make a database that stores the parsed values.
-
 enum request_type {
     NO_REQUEST,
     QUICK_WRITE,
