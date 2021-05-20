@@ -16,7 +16,15 @@ use tempfile::NamedTempFile;
 
 // TODO Add note to user specified file. Done.
 // TODO Open a text editor for creating notes. Done.
+// TODO Open note for editing. Done.
 
+#[derive(Debug)]
+enum RequestType {
+    WriteNote,
+    EditNote,
+}
+
+#[derive(Debug)]
 enum NoteSource {
     None,
     CommandLine,
@@ -24,7 +32,9 @@ enum NoteSource {
     File,
 }
 
+#[derive(Debug)]
 struct Request {
+    request_type: RequestType,
     file_name: String,
     note_body: Option<String>,
     note_source: NoteSource,
@@ -44,6 +54,9 @@ fn main() {
             .short("n")
             .long("note")
             .takes_value(true))
+        .arg(Arg::with_name("edit")
+            .short("e")
+            .long("edit"))
         .get_matches();
     
     let mut request = parse_args(&matches);
@@ -51,12 +64,21 @@ fn main() {
 }
 
 fn parse_args(matches: &ArgMatches) -> Request {
+    let request_type;
+
     let note_body: Option<String> = match matches.value_of("note") {
         Some(v) => Some(v.to_string()),
         _ => None
     };
 
+    if matches.is_present("edit") {
+        request_type = RequestType::EditNote;
+    } else {
+        request_type = RequestType::WriteNote;
+    }
+
     let request = Request { 
+        request_type,
         file_name: matches.value_of("file").unwrap_or("notes.txt").to_string(),
         note_body,
         note_source: NoteSource::None,
@@ -71,12 +93,28 @@ fn controller(request: &mut Request) {
     let notes_dir = Path::new(&home_dir).join("notes");
     let note_file_path = Path::new(&notes_dir).join(&request.file_name);
 
-    handle_note_source(request);
-    let note_body = get_note_body(request);
-    let note = create_note(&note_body);
-
     create_notes_dir(&notes_dir);
-    write_note(&note_file_path, &note);
+    handle_note_source(request);
+
+    match request.request_type {
+        RequestType::WriteNote => {
+            let note_body = get_note_body(request);
+            let note = create_note(&note_body);
+            write_note(&note_file_path, &note);
+        },
+        RequestType::EditNote => {
+            if let Some(editor) = &request.editor {
+                let status = open_editor(editor, note_file_path);
+                if !status.success() {
+                    eprintln!("Child process failed. Exiting...");
+                    process::exit(1);
+                }
+            } else {
+                eprintln!("$EDITOR environment variable is required for editing. Exiting...");
+                process::exit(1);
+            }
+        },
+    }
 }
 
 fn handle_note_source(request: &mut Request) {
@@ -90,7 +128,7 @@ fn handle_note_source(request: &mut Request) {
     }
 }
 
-fn get_note_body(request: &mut Request) -> String {
+fn get_note_body(request: &Request) -> String {
     let note_body;
 
     if let Some(v) = &request.note_body {
@@ -114,10 +152,7 @@ fn get_file_note(editor_name: &String) -> String {
     let file = NamedTempFile::new().unwrap();
     let temp_path = file.into_temp_path();
 
-    let status = process::Command::new(editor_name)
-        .arg(&temp_path)
-        .status()
-        .expect("Error occurred while opening the editor command.");
+    let status = open_editor(editor_name, temp_path.to_path_buf());
 
     if status.success() {
         let buffer = fs::read_to_string(&temp_path);
@@ -126,6 +161,15 @@ fn get_file_note(editor_name: &String) -> String {
         eprintln!("Child process failed. Exiting...");
         process::exit(1);
     }
+}
+
+fn open_editor(editor_name: &String, file_path: PathBuf) -> process::ExitStatus {
+    let status = process::Command::new(editor_name)
+        .arg(file_path)
+        .status()
+        .expect("Error occurred while opening the editor command.");
+
+    return status;
 }
 
 fn get_home_dir() -> PathBuf {
@@ -139,7 +183,7 @@ fn get_home_dir() -> PathBuf {
 }
 
 fn create_notes_dir(home_dir: &PathBuf) {
-    if let Err(_e) = fs::create_dir_all(home_dir) {
+    if let Err(_) = fs::create_dir_all(home_dir) {
         eprintln!("Could note create notes directory.");
         process::exit(1);
     }
@@ -171,7 +215,7 @@ fn write_note(path: &PathBuf, note: &String) {
 
     let mut file = OpenOptions::new().append(true).open(path).unwrap();
 
-    if let Err(_e) = file.write_all(note.as_bytes()) {
+    if let Err(_) = file.write_all(note.as_bytes()) {
         eprintln!("Could not write to the file. Exiting...");
         process::exit(1);
     }
@@ -179,7 +223,7 @@ fn write_note(path: &PathBuf, note: &String) {
 
 fn create_note_file(path: &PathBuf) {
     if !(path.exists() && path.is_file()) {
-        if let Err(_e) = fs::File::create(path) {
+        if let Err(_) = fs::File::create(path) {
             eprintln!("Note file creation failed. Exiting...");
             process::exit(1);
         }
