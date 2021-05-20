@@ -17,11 +17,13 @@ use tempfile::NamedTempFile;
 // TODO Add note to user specified file. Done.
 // TODO Open a text editor for creating notes. Done.
 // TODO Open note for editing. Done.
+// TODO Add option to list all notes. Done.
 
 #[derive(Debug)]
 enum RequestType {
     WriteNote,
     EditNote,
+    ListNotes,
 }
 
 #[derive(Debug)]
@@ -56,7 +58,12 @@ fn main() {
             .takes_value(true))
         .arg(Arg::with_name("edit")
             .short("e")
-            .long("edit"))
+            .long("edit")
+            .conflicts_with("note"))
+        .arg(Arg::with_name("list")
+            .short("l")
+            .long("list")
+            .conflicts_with_all(&["note", "edit"]))
         .get_matches();
     
     let mut request = parse_args(&matches);
@@ -73,6 +80,8 @@ fn parse_args(matches: &ArgMatches) -> Request {
 
     if matches.is_present("edit") {
         request_type = RequestType::EditNote;
+    } else if matches.is_present("list") {
+        request_type = RequestType::ListNotes;
     } else {
         request_type = RequestType::WriteNote;
     }
@@ -114,6 +123,9 @@ fn controller(request: &mut Request) {
                 process::exit(1);
             }
         },
+        RequestType::ListNotes => {
+            list_notes(&notes_dir);
+        }
     }
 }
 
@@ -227,5 +239,14 @@ fn create_note_file(path: &PathBuf) {
             eprintln!("Note file creation failed. Exiting...");
             process::exit(1);
         }
+    }
+}
+
+fn list_notes(path: &PathBuf) {
+    let paths = fs::read_dir(path).unwrap();
+
+    for path in paths {
+        let file_name = path.unwrap().file_name();
+        println!("{}", file_name.to_str().unwrap());
     }
 }
