@@ -18,6 +18,9 @@ use tempfile::NamedTempFile;
 // TODO Open a text editor for creating notes. Done.
 // TODO Open note for editing. Done.
 // TODO Add option to list all notes. Done.
+// TODO Add option to include date in note. Done.
+// TODO Add support for templates.
+// TODO Add config file.
 
 #[derive(Debug)]
 enum RequestType {
@@ -41,6 +44,7 @@ struct Request {
     note_body: Option<String>,
     note_source: NoteSource,
     editor: Option<String>,
+    write_date: bool,
 }
 
 fn main() {
@@ -68,6 +72,11 @@ fn main() {
             .long("list")
             .conflicts_with_all(&["note", "edit"])
             .help("List all the notes files in the notes directory."))
+        .arg(Arg::with_name("date")
+            .short("d")
+            .long("date")
+            .conflicts_with_all(&["edit", "list"])
+            .help("The date string will be added to the note."))
         .get_matches();
     
     let mut request = parse_args(&matches);
@@ -90,12 +99,15 @@ fn parse_args(matches: &ArgMatches) -> Request {
         request_type = RequestType::WriteNote;
     }
 
+    let write_date = matches.is_present("date");
+
     let request = Request { 
         request_type,
         file_name: matches.value_of("file").unwrap_or("notes.txt").to_string(),
         note_body,
         note_source: NoteSource::None,
         editor: None,
+        write_date
     };
 
     return request;
@@ -112,7 +124,7 @@ fn controller(request: &mut Request) {
     match request.request_type {
         RequestType::WriteNote => {
             let note_body = get_note_body(request);
-            let note = create_note(&note_body);
+            let note = create_note(request.write_date, &note_body);
             write_note(&note_file_path, &note);
         },
         RequestType::EditNote => {
@@ -222,8 +234,12 @@ fn get_date_time_string() -> String {
     return format!("{}, {}", WEEKDAYS[day_num], dt.format("%Y-%m-%d %H:%M"));
 }
 
-fn create_note(note_body: &String) -> String {
-    return format!("{}\n{}\n\n", get_date_time_string(), note_body);
+fn create_note(write_date: bool, note_body: &String) -> String {
+    if write_date {
+        return format!("{}\n{}\n\n", get_date_time_string(), note_body);
+    } else {
+        return format!("{}\n\n", note_body);
+    }
 }
 
 fn write_note(path: &PathBuf, note: &String) {
