@@ -2,16 +2,16 @@ use std::convert::TryInto;
 use std::env;
 use std::fs;
 use std::fs::OpenOptions;
-use std::io::{Write};
+use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process;
 
-extern crate dirs;
 extern crate clap;
+extern crate dirs;
 
 use chrono::prelude::*;
-use clap::{Arg, App, ArgMatches};
+use clap::{App, Arg, ArgMatches};
 use tempfile::NamedTempFile;
 
 // TODO Add note to user specified file. Done.
@@ -54,48 +54,61 @@ fn main() {
     let matches = App::new("notes")
         .version("0.1")
         .about("Make notes from command line")
-        .arg(Arg::with_name("file")
-            .short("f")
-            .long("file")
-            .value_name("FILE")
-            .takes_value(true)
-            .help("The note file to append the note to. Defaults to notes.txt."))
-        .arg(Arg::with_name("note")
-            .short("n")
-            .long("note")
-            .takes_value(true)
-            .help("The note message."))
-        .arg(Arg::with_name("edit")
-            .short("e")
-            .long("edit")
-            .conflicts_with("note")
-            .help("Open the note file for editing."))
-        .arg(Arg::with_name("list")
-            .short("l")
-            .long("list")
-            .conflicts_with_all(&["note", "edit"])
-            .help("List all the notes files in the notes directory."))
-        .arg(Arg::with_name("date")
-            .short("d")
-            .long("date")
-            .conflicts_with_all(&["edit", "list"])
-            .help("The date string will be added to the note."))
-        .arg(Arg::with_name("save_template")
-            .short("s")
-            .long("save-template")
-            .value_name("FILE")
-            .takes_value(true)
-            .conflicts_with_all(&["file", "note", "edit", "list", "date"])
-            .help("Create or update a template file."))
-        .arg(Arg::with_name("template")
-            .short("t")
-            .long("template")
-            .value_name("FILE")
-            .takes_value(true)
-            .conflicts_with_all(&["edit", "list"])
-            .help("Use the specified template."))
+        .arg(
+            Arg::with_name("file")
+                .short("f")
+                .long("file")
+                .value_name("FILE")
+                .takes_value(true)
+                .help("The note file to append the note to. Defaults to notes.txt."),
+        )
+        .arg(
+            Arg::with_name("note")
+                .short("n")
+                .long("note")
+                .takes_value(true)
+                .help("The note message."),
+        )
+        .arg(
+            Arg::with_name("edit")
+                .short("e")
+                .long("edit")
+                .conflicts_with("note")
+                .help("Open the note file for editing."),
+        )
+        .arg(
+            Arg::with_name("list")
+                .short("l")
+                .long("list")
+                .conflicts_with_all(&["note", "edit"])
+                .help("List all the notes files in the notes directory."),
+        )
+        .arg(
+            Arg::with_name("date")
+                .short("d")
+                .long("date")
+                .conflicts_with_all(&["edit", "list"])
+                .help("The date string will be added to the note."),
+        )
+        .arg(
+            Arg::with_name("save_template")
+                .short("s")
+                .long("save-template")
+                .value_name("FILE")
+                .takes_value(true)
+                .conflicts_with_all(&["file", "note", "edit", "list", "date"])
+                .help("Create or update a template file."),
+        )
+        .arg(
+            Arg::with_name("template")
+                .short("t")
+                .long("template")
+                .value_name("FILE")
+                .takes_value(true)
+                .conflicts_with_all(&["edit", "list"])
+                .help("Use the specified template."),
+        )
         .get_matches();
-    
     let mut request = parse_args(&matches);
     controller(&mut request);
 }
@@ -103,7 +116,7 @@ fn main() {
 fn parse_args(matches: &ArgMatches) -> Request {
     let note_body: Option<String> = match matches.value_of("note") {
         Some(v) => Some(v.to_string()),
-        _ => None
+        _ => None,
     };
 
     let request_type;
@@ -119,9 +132,15 @@ fn parse_args(matches: &ArgMatches) -> Request {
 
     let template_file_name;
     if matches.is_present("save_template") {
-        template_file_name = matches.value_of("template").unwrap_or("template.txt").to_string();
+        template_file_name = matches
+            .value_of("template")
+            .unwrap_or("template.txt")
+            .to_string();
     } else if matches.is_present("template") {
-        template_file_name = matches.value_of("template").unwrap_or("template.txt").to_string();
+        template_file_name = matches
+            .value_of("template")
+            .unwrap_or("template.txt")
+            .to_string();
     } else {
         template_file_name = "template.txt".to_string();
     }
@@ -130,14 +149,14 @@ fn parse_args(matches: &ArgMatches) -> Request {
     let write_date = matches.is_present("date");
     let use_template = matches.is_present("template");
 
-    let request = Request { 
+    let request = Request {
         request_type,
         note_file_name,
         note_body,
         note_source: NoteSource::None,
         editor: None,
         write_date,
-        template_file_name, 
+        template_file_name,
         use_template,
     };
 
@@ -158,7 +177,7 @@ fn controller(request: &mut Request) {
     match request.request_type {
         RequestType::WriteNote => {
             handle_write_request(&request, &note_file_path, &template_file_path);
-        },
+        }
         RequestType::EditNote => {
             if let Some(editor) = &request.editor {
                 let status = open_editor(editor, &note_file_path);
@@ -170,10 +189,10 @@ fn controller(request: &mut Request) {
                 eprintln!("$EDITOR environment variable is required for editing. Exiting...");
                 process::exit(1);
             }
-        },
+        }
         RequestType::ListNotes => {
             list_notes(&notes_dir);
-        },
+        }
         RequestType::SaveTemplate => {
             if let Some(editor) = &request.editor {
                 save_template(editor, &template_file_path);
@@ -185,11 +204,7 @@ fn controller(request: &mut Request) {
     }
 }
 
-fn handle_write_request(
-    request: &Request,
-    note_file_path: &PathBuf,
-    template_file_path: &PathBuf
-) {
+fn handle_write_request(request: &Request, note_file_path: &PathBuf, template_file_path: &PathBuf) {
     if request.use_template && request.editor.is_none() {
         eprintln!("$EDITOR environment variable is required for using templates. Exiting...");
         process::exit(1);
