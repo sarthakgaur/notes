@@ -19,7 +19,8 @@ use tempfile::NamedTempFile;
 // TODO Open note for editing. Done.
 // TODO Add option to list all notes. Done.
 // TODO Add option to include date in note. Done.
-// TODO Add support for templates.
+// TODO Add support for templates. Done.
+// TODO Refactor the code. Done.
 // TODO Add config file.
 
 #[derive(Debug)]
@@ -32,10 +33,9 @@ enum RequestType {
 
 #[derive(Debug)]
 enum NoteSource {
-    None,
     CommandLine,
     StandardInput,
-    File,
+    Editor,
 }
 
 #[derive(Debug)]
@@ -44,10 +44,19 @@ struct Request {
     note_file_name: String,
     note_body: Option<String>,
     note_source: NoteSource,
-    editor: Option<String>,
+    editor_name: Option<String>,
     write_date: bool,
     template_file_name: String,
     use_template: bool,
+}
+
+#[derive(Debug)]
+struct Paths {
+    home_dir: PathBuf,
+    notes_dir: PathBuf,
+    templates_dir: PathBuf,
+    note_file: PathBuf,
+    template_file: PathBuf,
 }
 
 fn main() {
@@ -109,11 +118,21 @@ fn main() {
                 .help("Use the specified template."),
         )
         .get_matches();
-    let mut request = parse_args(&matches);
-    controller(&mut request);
+
+    start(matches)
 }
 
-fn parse_args(matches: &ArgMatches) -> Request {
+fn start(matches: ArgMatches) {
+    let request = build_request(&matches);
+    let paths = build_paths(&request);
+
+    create_dir(&paths.notes_dir);
+    create_dir(&paths.templates_dir);
+
+    handle_request(request, paths);
+}
+
+fn build_request(matches: &ArgMatches) -> Request {
     let note_body: Option<String> = match matches.value_of("note") {
         Some(v) => Some(v.to_string()),
         _ => None,
@@ -130,7 +149,7 @@ fn parse_args(matches: &ArgMatches) -> Request {
         request_type = RequestType::WriteNote;
     }
 
-    let template_file_name;
+    let mut template_file_name = "template.txt".to_string();
     if matches.is_present("save_template") {
         template_file_name = matches
             .value_of("template")
@@ -141,8 +160,17 @@ fn parse_args(matches: &ArgMatches) -> Request {
             .value_of("template")
             .unwrap_or("template.txt")
             .to_string();
+    }
+
+    let note_source;
+    let mut editor_name = None;
+    if let Some(_) = note_body {
+        note_source = NoteSource::CommandLine;
+    } else if let Ok(editor) = env::var("EDITOR") {
+        note_source = NoteSource::Editor;
+        editor_name = Some(editor);
     } else {
-        template_file_name = "template.txt".to_string();
+        note_source = NoteSource::StandardInput;
     }
 
     let note_file_name = matches.value_of("file").unwrap_or("notes.txt").to_string();
@@ -153,8 +181,8 @@ fn parse_args(matches: &ArgMatches) -> Request {
         request_type,
         note_file_name,
         note_body,
-        note_source: NoteSource::None,
-        editor: None,
+        note_source,
+        editor_name,
         write_date,
         template_file_name,
         use_template,
@@ -163,66 +191,74 @@ fn parse_args(matches: &ArgMatches) -> Request {
     return request;
 }
 
-fn controller(request: &mut Request) {
-    let home_dir = get_home_dir();
-    let notes_dir = Path::new(&home_dir).join("notes");
-    let templates_dir = Path::new(&notes_dir).join("templates");
-    let note_file_path = Path::new(&notes_dir).join(&request.note_file_name);
-    let template_file_path = Path::new(&templates_dir).join(&request.template_file_name);
-
-    create_dir(&notes_dir);
-    create_dir(&templates_dir);
-    handle_note_source(request);
-
+fn handle_request(request: Request, paths: Paths) {
     match request.request_type {
         RequestType::WriteNote => {
-            handle_write_request(&request, &note_file_path, &template_file_path);
+            handle_write_request(&request, &paths);
         }
         RequestType::EditNote => {
-            if let Some(editor) = &request.editor {
-                let status = open_editor(editor, &note_file_path);
-                if !status.success() {
-                    eprintln!("Child process failed. Exiting...");
-                    process::exit(1);
-                }
-            } else {
-                eprintln!("$EDITOR environment variable is required for editing. Exiting...");
-                process::exit(1);
-            }
+            handle_edit_request(&request, &paths);
         }
         RequestType::ListNotes => {
-            list_notes(&notes_dir);
+            handle_list_request(&paths);
         }
         RequestType::SaveTemplate => {
-            if let Some(editor) = &request.editor {
-                save_template(editor, &template_file_path);
-            } else {
-                eprintln!("$EDITOR env var is required for saving templates. Exiting...");
-                process::exit(1);
-            }
+            handle_save_request(&request, &paths);
         }
     }
 }
 
-fn handle_write_request(request: &Request, note_file_path: &PathBuf, template_file_path: &PathBuf) {
-    if request.use_template && request.editor.is_none() {
+fn build_paths(request: &Request) -> Paths {
+    let home_dir = get_home_dir();
+    let notes_dir = Path::new(&home_dir).join("notes");
+    let templates_dir = Path::new(&notes_dir).join("templates");
+    let note_file = Path::new(&notes_dir).join(&request.note_file_name);
+    let template_file = Path::new(&templates_dir).join(&request.template_file_name);
+
+    return Paths {
+        home_dir,
+        notes_dir,
+        templates_dir,
+        note_file,
+        template_file,
+    };
+}
+
+fn handle_write_request(request: &Request, paths: &Paths) {
+    if request.use_template && request.editor_name.is_none() {
         eprintln!("$EDITOR environment variable is required for using templates. Exiting...");
         process::exit(1);
     }
 
-    let note_body = get_note_body(request, template_file_path);
+    let note_body = get_note_body(request, &paths.template_file);
     let note = create_note(request.write_date, &note_body);
-    write_note(&note_file_path, &note);
+    write_note(&paths.note_file, &note);
 }
 
-fn handle_note_source(request: &mut Request) {
-    if let Some(_) = &request.note_body {
-        request.note_source = NoteSource::CommandLine;
-    } else if let Ok(editor) = env::var("EDITOR") {
-        request.note_source = NoteSource::File;
-        request.editor = Some(editor);
+fn handle_edit_request(request: &Request, paths: &Paths) {
+    if let Some(editor_name) = &request.editor_name {
+        let status = open_editor(editor_name, &paths.note_file);
+        if !status.success() {
+            eprintln!("Child process failed. Exiting...");
+            process::exit(1);
+        }
     } else {
-        request.note_source = NoteSource::StandardInput;
+        eprintln!("$EDITOR environment variable is required for editing. Exiting...");
+        process::exit(1);
+    }
+}
+
+fn handle_list_request(paths: &Paths) {
+    list_dir_contents(&paths.notes_dir);
+}
+
+fn handle_save_request(request: &Request, paths: &Paths) {
+    if let Some(editor) = &request.editor_name {
+        create_file(&paths.template_file);
+        open_editor(editor, &paths.template_file);
+    } else {
+        eprintln!("$EDITOR env var is required for saving templates. Exiting...");
+        process::exit(1);
     }
 }
 
@@ -231,7 +267,7 @@ fn get_note_body(request: &Request, template_file_path: &PathBuf) -> String {
 
     if let Some(v) = &request.note_body {
         note_body = v.to_string();
-    } else if let NoteSource::File = request.note_source {
+    } else if let NoteSource::Editor = request.note_source {
         note_body = get_file_note(request, template_file_path);
     } else {
         note_body = get_stdin_note();
@@ -255,7 +291,10 @@ fn get_file_note(request: &Request, template_file_path: &PathBuf) -> String {
     }
 
     let temp_path = file.into_temp_path();
-    let status = open_editor(&request.editor.as_ref().unwrap(), &temp_path.to_path_buf());
+    let status = open_editor(
+        &request.editor_name.as_ref().unwrap(),
+        &temp_path.to_path_buf(),
+    );
 
     if status.success() {
         let mut buffer = fs::read_to_string(&temp_path).unwrap();
@@ -338,16 +377,11 @@ fn create_file(path: &PathBuf) {
     }
 }
 
-fn list_notes(path: &PathBuf) {
+fn list_dir_contents(path: &PathBuf) {
     let paths = fs::read_dir(path).unwrap();
 
     for path in paths {
         let file_name = path.unwrap().file_name();
         println!("{}", file_name.to_str().unwrap());
     }
-}
-
-fn save_template(editor_name: &String, path: &PathBuf) {
-    create_file(path);
-    open_editor(editor_name, path);
 }
