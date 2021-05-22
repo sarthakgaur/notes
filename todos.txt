@@ -8,4 +8,4 @@
 08. Add config file. Done.
 09. Add cache file. Done.
 10. Refactor the code. Done.
-11. Add README.md.
+11. Add README.md. Done.
