@@ -14,17 +14,7 @@ use chrono::prelude::*;
 use clap::{App, Arg, ArgMatches};
 use serde::{Deserialize, Serialize};
 use tempfile::NamedTempFile;
-
-// TODO Add note to user specified file. Done.
-// TODO Open a text editor for creating notes. Done.
-// TODO Open note for editing. Done.
-// TODO Add option to list all notes. Done.
-// TODO Add option to include date in note. Done.
-// TODO Add support for templates. Done.
-// TODO Refactor the code. Done.
-// TODO Add config file. Done.
-// TODO Add cache file. Done.
-// TODO Refactor the code.
+use toml::Value;
 
 #[derive(Debug)]
 enum RequestType {
@@ -155,7 +145,8 @@ fn start(matches: ArgMatches) {
     let config = build_config(&gen_paths);
     let note_paths = build_note_paths(&request, &config);
 
-    create_dir(&note_paths.templates_dir); // Need only this.
+    // This will also create the notes directory.
+    create_dir(&note_paths.templates_dir);
 
     handle_request(request, &note_paths);
 }
@@ -180,14 +171,12 @@ fn build_config(gen_paths: &GeneralPaths) -> Config {
             let cache_mod_time = cache_file_stat.modified().unwrap().elapsed().unwrap();
 
             if config_mod_time < cache_mod_time {
-                config = read_config(&gen_paths);
-                write_cache(&gen_paths, &config)
+                config = update_cache(gen_paths);
             } else {
                 config = read_cache(&gen_paths);
             }
         } else {
-            config = read_config(&gen_paths);
-            write_cache(&gen_paths, &config)
+            config = update_cache(gen_paths);
         }
     }
 
@@ -270,7 +259,7 @@ fn build_gen_paths() -> GeneralPaths {
 }
 
 fn build_note_paths(request: &Request, config: &Config) -> NotePaths {
-    let notes_dir = Path::new(&config.notes_parent_dir).join("notes"); // here
+    let notes_dir = Path::new(&config.notes_parent_dir).join("notes");
     let templates_dir = Path::new(&notes_dir).join("templates");
     let note_file = Path::new(&notes_dir).join(&request.note_file_name);
     let template_file = Path::new(&templates_dir).join(&request.template_file_name);
@@ -456,6 +445,23 @@ fn list_dir_contents(path: &PathBuf) {
     }
 }
 
+fn parse_config_toml(gen_paths: &GeneralPaths, config_toml: Value) -> Config {
+    let notes_parent_dir;
+    if let Some(v) = config_toml.get("notes_parent_dir") {
+        notes_parent_dir = PathBuf::from(v.as_str().unwrap());
+    } else {
+        notes_parent_dir = PathBuf::from(&gen_paths.default_notes_parent_dir);
+    }
+
+    return Config { notes_parent_dir };
+}
+
+fn read_config(gen_paths: &GeneralPaths) -> Value {
+    let contents = fs::read_to_string(&gen_paths.config_file).unwrap();
+    let value = contents.parse::<toml::Value>().unwrap();
+    return value;
+}
+
 fn write_config(gen_paths: &GeneralPaths, config: &Config) {
     let content = format!(
         "# Specify the absolute path of the notes parent directory.\n\
@@ -481,22 +487,6 @@ fn write_config(gen_paths: &GeneralPaths, config: &Config) {
     }
 }
 
-fn read_config(gen_paths: &GeneralPaths) -> Config {
-    let contents = fs::read_to_string(&gen_paths.config_file).unwrap();
-    let value: toml::Value = contents.parse::<toml::Value>().unwrap();
-
-    let notes_parent_dir;
-    if let Some(v) = value.get("notes_parent_dir") {
-        notes_parent_dir = PathBuf::from(v.as_str().unwrap());
-    } else {
-        notes_parent_dir = PathBuf::from(&gen_paths.default_notes_parent_dir);
-    }
-
-    let config = Config { notes_parent_dir };
-
-    return config;
-}
-
 fn read_cache(gen_paths: &GeneralPaths) -> Config {
     let contents = fs::read_to_string(&gen_paths.cache_file).unwrap();
     let bytes = contents.as_bytes();
@@ -517,4 +507,11 @@ fn write_cache(gen_paths: &GeneralPaths, config: &Config) {
         eprintln!("Could not write to the cache file. Exiting...");
         process::exit(1);
     }
+}
+
+fn update_cache(gen_paths: &GeneralPaths) -> Config {
+    let config_toml = read_config(&gen_paths);
+    let config = parse_config_toml(gen_paths, config_toml);
+    write_cache(&gen_paths, &config);
+    return config;
 }

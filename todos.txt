@@ -1,0 +1,11 @@
+01. Add note to user specified file. Done.
+02. Open a text editor for creating notes. Done.
+03. Open note for editing. Done.
+04. Add option to list all notes. Done.
+05. Add option to include date in note. Done.
+06. Add support for templates. Done.
+07. Refactor the code. Done.
+08. Add config file. Done.
+09. Add cache file. Done.
+10. Refactor the code. Done.
+11. Add README.md.
