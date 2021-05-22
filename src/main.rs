@@ -2,7 +2,7 @@ use std::convert::TryInto;
 use std::env;
 use std::fs;
 use std::fs::OpenOptions;
-use std::io::Write;
+use std::io::{self, Write};
 use std::path::Path;
 use std::path::PathBuf;
 use std::process;
@@ -334,8 +334,13 @@ fn get_note_body(request: &Request, template_file_path: &PathBuf) -> String {
 }
 
 fn get_stdin_note() -> String {
+    let mut stdout = io::stdout();
+    write!(&mut stdout, "Enter note: ");
+    stdout.flush().unwrap();
+
     let mut input = String::new();
     std::io::stdin().read_line(&mut input).unwrap();
+    input = input.trim().to_owned(); // To remove last new line.
     return input;
 }
 
