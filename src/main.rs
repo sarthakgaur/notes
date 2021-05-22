@@ -12,6 +12,7 @@ extern crate dirs;
 
 use chrono::prelude::*;
 use clap::{App, Arg, ArgMatches};
+use serde::{Deserialize, Serialize};
 use tempfile::NamedTempFile;
 
 // TODO Add note to user specified file. Done.
@@ -21,7 +22,9 @@ use tempfile::NamedTempFile;
 // TODO Add option to include date in note. Done.
 // TODO Add support for templates. Done.
 // TODO Refactor the code. Done.
-// TODO Add config file.
+// TODO Add config file. Done.
+// TODO Add cache file. Done.
+// TODO Refactor the code.
 
 #[derive(Debug)]
 enum RequestType {
@@ -39,6 +42,12 @@ enum NoteSource {
 }
 
 #[derive(Debug)]
+enum FileStatus {
+    Created,
+    Exists,
+}
+
+#[derive(Debug)]
 struct Request {
     request_type: RequestType,
     note_file_name: String,
@@ -51,12 +60,26 @@ struct Request {
 }
 
 #[derive(Debug)]
-struct Paths {
+struct GeneralPaths {
     home_dir: PathBuf,
+    config_dir: PathBuf,
+    cache_dir: PathBuf,
+    default_notes_parent_dir: PathBuf,
+    config_file: PathBuf,
+    cache_file: PathBuf,
+}
+
+#[derive(Debug)]
+struct NotePaths {
     notes_dir: PathBuf,
     templates_dir: PathBuf,
     note_file: PathBuf,
     template_file: PathBuf,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct Config {
+    notes_parent_dir: PathBuf,
 }
 
 fn main() {
@@ -124,12 +147,51 @@ fn main() {
 
 fn start(matches: ArgMatches) {
     let request = build_request(&matches);
-    let paths = build_paths(&request);
+    let gen_paths = build_gen_paths();
 
-    create_dir(&paths.notes_dir);
-    create_dir(&paths.templates_dir);
+    create_dir(&gen_paths.cache_dir);
+    create_dir(&gen_paths.config_dir);
 
-    handle_request(request, paths);
+    let config = build_config(&gen_paths);
+    let note_paths = build_note_paths(&request, &config);
+
+    create_dir(&note_paths.templates_dir); // Need only this.
+
+    handle_request(request, &note_paths);
+}
+
+fn build_config(gen_paths: &GeneralPaths) -> Config {
+    let config_file_status = create_file(&gen_paths.config_file);
+    let cache_file_status = create_file(&gen_paths.cache_file);
+
+    let config;
+    if let FileStatus::Created = config_file_status {
+        config = Config {
+            notes_parent_dir: PathBuf::from(&gen_paths.default_notes_parent_dir),
+        };
+
+        write_config(gen_paths, &config);
+        write_cache(gen_paths, &config)
+    } else {
+        if let FileStatus::Exists = cache_file_status {
+            let config_file_stat = fs::metadata(&gen_paths.config_file).unwrap();
+            let cache_file_stat = fs::metadata(&gen_paths.cache_file).unwrap();
+            let config_mod_time = config_file_stat.modified().unwrap().elapsed().unwrap();
+            let cache_mod_time = cache_file_stat.modified().unwrap().elapsed().unwrap();
+
+            if config_mod_time < cache_mod_time {
+                config = read_config(&gen_paths);
+                write_cache(&gen_paths, &config)
+            } else {
+                config = read_cache(&gen_paths);
+            }
+        } else {
+            config = read_config(&gen_paths);
+            write_cache(&gen_paths, &config)
+        }
+    }
+
+    return config;
 }
 
 fn build_request(matches: &ArgMatches) -> Request {
@@ -177,7 +239,7 @@ fn build_request(matches: &ArgMatches) -> Request {
     let write_date = matches.is_present("date");
     let use_template = matches.is_present("template");
 
-    let request = Request {
+    return Request {
         request_type,
         note_file_name,
         note_body,
@@ -187,36 +249,33 @@ fn build_request(matches: &ArgMatches) -> Request {
         template_file_name,
         use_template,
     };
-
-    return request;
 }
 
-fn handle_request(request: Request, paths: Paths) {
-    match request.request_type {
-        RequestType::WriteNote => {
-            handle_write_request(&request, &paths);
-        }
-        RequestType::EditNote => {
-            handle_edit_request(&request, &paths);
-        }
-        RequestType::ListNotes => {
-            handle_list_request(&paths);
-        }
-        RequestType::SaveTemplate => {
-            handle_save_request(&request, &paths);
-        }
-    }
-}
-
-fn build_paths(request: &Request) -> Paths {
+fn build_gen_paths() -> GeneralPaths {
     let home_dir = get_home_dir();
-    let notes_dir = Path::new(&home_dir).join("notes");
+    let config_dir = Path::new(&home_dir).join(".config").join("notes");
+    let cache_dir = Path::new(&home_dir).join(".cache").join("notes");
+    let default_notes_parent_dir = PathBuf::from(&home_dir);
+    let config_file = Path::new(&config_dir).join("config.toml");
+    let cache_file = Path::new(&cache_dir).join("cache");
+
+    return GeneralPaths {
+        home_dir,
+        config_dir,
+        cache_dir,
+        default_notes_parent_dir,
+        config_file,
+        cache_file,
+    };
+}
+
+fn build_note_paths(request: &Request, config: &Config) -> NotePaths {
+    let notes_dir = Path::new(&config.notes_parent_dir).join("notes"); // here
     let templates_dir = Path::new(&notes_dir).join("templates");
     let note_file = Path::new(&notes_dir).join(&request.note_file_name);
     let template_file = Path::new(&templates_dir).join(&request.template_file_name);
 
-    return Paths {
-        home_dir,
+    return NotePaths {
         notes_dir,
         templates_dir,
         note_file,
@@ -224,20 +283,29 @@ fn build_paths(request: &Request) -> Paths {
     };
 }
 
-fn handle_write_request(request: &Request, paths: &Paths) {
+fn handle_request(request: Request, note_paths: &NotePaths) {
+    match request.request_type {
+        RequestType::WriteNote => handle_write_request(&request, &note_paths),
+        RequestType::EditNote => handle_edit_request(&request, &note_paths),
+        RequestType::ListNotes => handle_list_request(&note_paths),
+        RequestType::SaveTemplate => handle_save_request(&request, &note_paths),
+    }
+}
+
+fn handle_write_request(request: &Request, note_paths: &NotePaths) {
     if request.use_template && request.editor_name.is_none() {
         eprintln!("$EDITOR environment variable is required for using templates. Exiting...");
         process::exit(1);
     }
 
-    let note_body = get_note_body(request, &paths.template_file);
+    let note_body = get_note_body(request, &note_paths.template_file);
     let note = create_note(request.write_date, &note_body);
-    write_note(&paths.note_file, &note);
+    write_note(&note_paths.note_file, &note);
 }
 
-fn handle_edit_request(request: &Request, paths: &Paths) {
+fn handle_edit_request(request: &Request, note_paths: &NotePaths) {
     if let Some(editor_name) = &request.editor_name {
-        let status = open_editor(editor_name, &paths.note_file);
+        let status = open_editor(editor_name, &note_paths.note_file);
         if !status.success() {
             eprintln!("Child process failed. Exiting...");
             process::exit(1);
@@ -248,14 +316,14 @@ fn handle_edit_request(request: &Request, paths: &Paths) {
     }
 }
 
-fn handle_list_request(paths: &Paths) {
-    list_dir_contents(&paths.notes_dir);
+fn handle_list_request(note_paths: &NotePaths) {
+    list_dir_contents(&note_paths.notes_dir);
 }
 
-fn handle_save_request(request: &Request, paths: &Paths) {
+fn handle_save_request(request: &Request, note_paths: &NotePaths) {
     if let Some(editor) = &request.editor_name {
-        create_file(&paths.template_file);
-        open_editor(editor, &paths.template_file);
+        create_file(&note_paths.template_file);
+        open_editor(editor, &note_paths.template_file);
     } else {
         eprintln!("$EDITOR env var is required for saving templates. Exiting...");
         process::exit(1);
@@ -368,13 +436,15 @@ fn write_note(path: &PathBuf, note: &String) {
     }
 }
 
-fn create_file(path: &PathBuf) {
+fn create_file(path: &PathBuf) -> FileStatus {
     if !(path.exists() && path.is_file()) {
         if let Err(_) = fs::File::create(path) {
             eprintln!("{:?} file creation failed. Exiting...", path.file_name());
             process::exit(1);
         }
+        return FileStatus::Created;
     }
+    return FileStatus::Exists;
 }
 
 fn list_dir_contents(path: &PathBuf) {
@@ -383,5 +453,68 @@ fn list_dir_contents(path: &PathBuf) {
     for path in paths {
         let file_name = path.unwrap().file_name();
         println!("{}", file_name.to_str().unwrap());
+    }
+}
+
+fn write_config(gen_paths: &GeneralPaths, config: &Config) {
+    let content = format!(
+        "# Specify the absolute path of the notes parent directory.\n\
+             #\n\
+             # Example usage:\n\
+             # notes_parent_dir = \"/home/john/Documents/\"\n\
+             # \n\
+             # This will create the directory \"/home/john/Documents/notes\"\n\n\
+
+             notes_parent_dir = {:?}\n\n",
+        &config.notes_parent_dir
+    );
+
+    let mut file = OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .open(&gen_paths.config_file)
+        .unwrap();
+
+    if let Err(_) = file.write_all(content.as_bytes()) {
+        eprintln!("Could not write to the config file. Exiting...");
+        process::exit(1);
+    }
+}
+
+fn read_config(gen_paths: &GeneralPaths) -> Config {
+    let contents = fs::read_to_string(&gen_paths.config_file).unwrap();
+    let value: toml::Value = contents.parse::<toml::Value>().unwrap();
+
+    let notes_parent_dir;
+    if let Some(v) = value.get("notes_parent_dir") {
+        notes_parent_dir = PathBuf::from(v.as_str().unwrap());
+    } else {
+        notes_parent_dir = PathBuf::from(&gen_paths.default_notes_parent_dir);
+    }
+
+    let config = Config { notes_parent_dir };
+
+    return config;
+}
+
+fn read_cache(gen_paths: &GeneralPaths) -> Config {
+    let contents = fs::read_to_string(&gen_paths.cache_file).unwrap();
+    let bytes = contents.as_bytes();
+    let config: Config = bincode::deserialize(bytes).unwrap();
+    return config;
+}
+
+fn write_cache(gen_paths: &GeneralPaths, config: &Config) {
+    let bytes = bincode::serialize(config).unwrap();
+
+    let mut cache_file = OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .open(&gen_paths.cache_file)
+        .unwrap();
+
+    if let Err(_) = cache_file.write_all(&bytes) {
+        eprintln!("Could not write to the cache file. Exiting...");
+        process::exit(1);
     }
 }
