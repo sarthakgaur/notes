@@ -14,21 +14,22 @@ Write notes from the command line.
 4. Add current date and time to your notes.
 5. Option to use templates in your notes.
 6. Users can choose where their notes are saved.
-7. List all the note files.
+7. List all the note and template files.
 
 ## Command Line Arguments
     USAGE:
         notes [FLAGS] [OPTIONS]
 
     FLAGS:
-        -d, --date       The date string will be added to the note.
-        -e, --edit       Open the note file for editing.
-        -h, --help       Prints help information
-        -l, --list       List all the notes files in the notes directory.
-        -V, --version    Prints version information
+        -d, --date              The date string will be added to the note.
+        -e, --edit              Open the note file for editing.
+        -h, --help              Prints help information
+        -l, --list              List all the notes files in the notes directory.
+            --list-templates    List all the templates files in the templates directory.
+        -V, --version           Prints version information
 
     OPTIONS:
-        -f, --file <FILE>             The note file to append the note to. Defaults to notes.txt.
+        -f, --file <FILE>             The note file to append the note to. Default notes.txt.
         -n, --note <note>             The note message.
         -s, --save-template <FILE>    Create or update a template file.
         -t, --template <FILE>         Use the specified template.
@@ -53,7 +54,7 @@ The config file is located at `~/.config/notes/config.toml`. It includes the fol
     # 
     # This will create the directory "/home/john/Documents/notes"
 
-    notes_parent_dir = "/home/dv"
+    notes_parent_dir = "/home/john"
 
 Here you can change the `notes` directory location.
 
