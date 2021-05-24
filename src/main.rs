@@ -68,6 +68,20 @@ fn main() {
                 .conflicts_with_all(&["edit", "list"])
                 .help("Use the specified template."),
         )
+        .arg(
+            Arg::with_name("list_templates")
+                .long("list-templates")
+                .conflicts_with_all(&[
+                    "file",
+                    "note",
+                    "edit",
+                    "list",
+                    "date",
+                    "save_template",
+                    "template",
+                ])
+                .help("List all the templates files in the templates directory."),
+        )
         .get_matches();
 
     start(matches)

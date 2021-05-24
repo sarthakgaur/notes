@@ -10,4 +10,5 @@
 10. Refactor the code. Done.
 11. Add README.md. Done.
 12. Split project in multiple files. Done.
+13. Add option to list all templates. Done.
 13. Check note is not an empty string.

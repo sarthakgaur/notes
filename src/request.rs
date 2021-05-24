@@ -1,11 +1,11 @@
 use std::env;
 use std::process;
 
-use clap::{ArgMatches};
+use clap::ArgMatches;
 
+use crate::note;
 use crate::paths::NotePaths;
 use crate::utils;
-use crate::note;
 
 #[derive(Debug)]
 pub enum RequestType {
@@ -13,6 +13,7 @@ pub enum RequestType {
     EditNote,
     ListNotes,
     SaveTemplate,
+    ListTemplates,
 }
 
 #[derive(Debug)]
@@ -47,6 +48,8 @@ pub fn build_request(matches: &ArgMatches) -> Request {
         request_type = RequestType::ListNotes;
     } else if matches.is_present("save_template") {
         request_type = RequestType::SaveTemplate;
+    } else if matches.is_present("list_templates") {
+        request_type = RequestType::ListTemplates;
     } else {
         request_type = RequestType::WriteNote;
     }
@@ -54,7 +57,7 @@ pub fn build_request(matches: &ArgMatches) -> Request {
     let mut template_file_name = "template.txt".to_string();
     if matches.is_present("save_template") {
         template_file_name = matches
-            .value_of("template")
+            .value_of("save_template")
             .unwrap_or("template.txt")
             .to_string();
     } else if matches.is_present("template") {
@@ -97,6 +100,7 @@ pub fn handle_request(request: Request, note_paths: &NotePaths) {
         RequestType::EditNote => handle_edit_request(&request, &note_paths),
         RequestType::ListNotes => handle_list_request(&note_paths),
         RequestType::SaveTemplate => handle_save_request(&request, &note_paths),
+        RequestType::ListTemplates => handle_list_templates(note_paths),
     }
 }
 
@@ -136,4 +140,8 @@ fn handle_save_request(request: &Request, note_paths: &NotePaths) {
         eprintln!("$EDITOR env var is required for saving templates. Exiting...");
         process::exit(1);
     }
+}
+
+fn handle_list_templates(note_paths: &NotePaths) {
+    utils::list_dir_contents(&note_paths.templates_dir);
 }
