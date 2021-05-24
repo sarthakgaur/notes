@@ -6,6 +6,7 @@ use std::{
 };
 
 use anyhow::bail;
+use fehler::throws;
 use tempfile::NamedTempFile;
 
 use crate::request::{NoteSource, Request};
@@ -19,17 +20,17 @@ pub fn create_note(write_date: bool, note_body: &str) -> String {
     }
 }
 
-pub fn write_note(path: &Path, note: &str) -> anyhow::Result<()> {
+#[throws(anyhow::Error)]
+pub fn write_note(path: &Path, note: &str) {
     utils::create_file(path)?;
 
     let mut file = OpenOptions::new().append(true).open(path).unwrap();
 
     file.write_all(note.as_bytes())?;
-
-    Ok(())
 }
 
-pub fn get_note_body(request: &Request, template_file_path: &Path) -> anyhow::Result<String> {
+#[throws(anyhow::Error)]
+pub fn get_note_body(request: &Request, template_file_path: &Path) -> String {
     let note_body = if let Some(v) = &request.note_body {
         v.to_owned()
     } else if let NoteSource::Editor = request.note_source {
@@ -38,10 +39,11 @@ pub fn get_note_body(request: &Request, template_file_path: &Path) -> anyhow::Re
         get_stdin_note()
     };
 
-    Ok(note_body.trim().to_owned())
+    note_body.trim().to_owned()
 }
 
-fn get_file_note(request: &Request, template_file_path: &Path) -> anyhow::Result<String> {
+#[throws(anyhow::Error)]
+fn get_file_note(request: &Request, template_file_path: &Path) -> String {
     let mut file = NamedTempFile::new()?;
 
     if request.use_template {
@@ -57,7 +59,7 @@ fn get_file_note(request: &Request, template_file_path: &Path) -> anyhow::Result
     )?;
 
     if status.success() {
-        Ok(fs::read_to_string(&temp_path)?)
+        fs::read_to_string(&temp_path)?
     } else {
         bail!("Child process failed. Exiting...")
     }

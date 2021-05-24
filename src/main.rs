@@ -1,3 +1,4 @@
+use fehler::throws;
 use std::fs::create_dir_all;
 
 mod cache;
@@ -8,7 +9,8 @@ mod paths;
 mod request;
 mod utils;
 
-fn main() -> anyhow::Result<()> {
+#[throws(anyhow::Error)]
+fn main() {
     let matches = clap_app::app().get_matches();
 
     let request = request::Request::new(&matches);
@@ -23,5 +25,5 @@ fn main() -> anyhow::Result<()> {
     // This will also create the notes directory.
     create_dir_all(&note_paths.templates_dir)?;
 
-    request.handle(&note_paths)
+    request.handle(&note_paths)?;
 }

@@ -1,8 +1,9 @@
 use std::env;
 use std::process;
 
-use anyhow::{anyhow, bail};
+use anyhow::bail;
 use clap::ArgMatches;
+use fehler::throws;
 
 use crate::note;
 use crate::paths::NotePaths;
@@ -85,7 +86,8 @@ impl Request {
         }
     }
 
-    pub fn handle(self, note_paths: &NotePaths) -> anyhow::Result<()> {
+    #[throws(anyhow::Error)]
+    pub fn handle(self, note_paths: &NotePaths) {
         match self.request_type {
             RequestType::WriteNote => self.handle_write_request(&note_paths)?,
             RequestType::EditNote => self.handle_edit_request(&note_paths)?,
@@ -93,11 +95,10 @@ impl Request {
             RequestType::SaveTemplate => self.handle_save_request(&note_paths)?,
             RequestType::ListTemplates => self.handle_list_templates(note_paths)?,
         }
-
-        Ok(())
     }
 
-    fn handle_write_request(&self, note_paths: &NotePaths) -> anyhow::Result<()> {
+    #[throws(anyhow::Error)]
+    fn handle_write_request(&self, note_paths: &NotePaths) {
         if self.use_template && self.editor_name.is_none() {
             eprintln!("$EDITOR environment variable is required for using templates. Exiting...");
             process::exit(1);
@@ -105,15 +106,14 @@ impl Request {
 
         let note_body = note::get_note_body(self, &note_paths.template_file)?;
         let note = note::create_note(self.write_date, &note_body);
-        note::write_note(&note_paths.note_file, &note)
+        note::write_note(&note_paths.note_file, &note)?;
     }
 
-    fn handle_edit_request(&self, note_paths: &NotePaths) -> anyhow::Result<()> {
+    #[throws(anyhow::Error)]
+    fn handle_edit_request(&self, note_paths: &NotePaths) {
         if let Some(editor_name) = &self.editor_name {
             let status = utils::open_editor(editor_name, &note_paths.note_file)?;
-            if status.success() {
-                Ok(())
-            } else {
+            if !status.success() {
                 bail!("Child process failed.")
             }
         } else {
@@ -121,22 +121,23 @@ impl Request {
         }
     }
 
-    fn handle_list_request(&self, note_paths: &NotePaths) -> anyhow::Result<()> {
-        utils::list_dir_contents(&note_paths.notes_dir)
+    #[throws(anyhow::Error)]
+    fn handle_list_request(&self, note_paths: &NotePaths) {
+        utils::list_dir_contents(&note_paths.notes_dir)?;
     }
 
-    fn handle_save_request(&self, note_paths: &NotePaths) -> anyhow::Result<()> {
+    #[throws(anyhow::Error)]
+    fn handle_save_request(&self, note_paths: &NotePaths) {
         if let Some(editor) = &self.editor_name {
             utils::create_file(&note_paths.template_file)?;
             utils::open_editor(editor, &note_paths.template_file)?;
-
-            Ok(())
         } else {
-            Err(anyhow!("$EDITOR env var is required for saving templates"))
+            bail!("$EDITOR env var is required for saving templates")
         }
     }
 
-    fn handle_list_templates(&self, note_paths: &NotePaths) -> anyhow::Result<()> {
-        utils::list_dir_contents(&note_paths.templates_dir)
+    #[throws(anyhow::Error)]
+    fn handle_list_templates(&self, note_paths: &NotePaths) {
+        utils::list_dir_contents(&note_paths.templates_dir)?;
     }
 }
