@@ -12,12 +12,10 @@ pub enum FileStatus {
 }
 
 pub fn open_editor(editor_name: &str, file_path: &Path) -> process::ExitStatus {
-    let status = process::Command::new(editor_name)
+    process::Command::new(editor_name)
         .arg(file_path)
         .status()
-        .expect("Error occurred while opening the editor command.");
-
-    status
+        .expect("Error occurred while opening the editor command.")
 }
 
 pub fn get_home_dir() -> PathBuf {
@@ -51,24 +49,24 @@ pub fn get_date_time_string() -> String {
     let dt = chrono::prelude::Local::now();
     let day_num: usize = dt.weekday().num_days_from_monday().try_into().unwrap();
 
-    return format!("{}, {}", WEEKDAYS[day_num], dt.format("%Y-%m-%d %H:%M"));
+    format!("{}, {}", WEEKDAYS[day_num], dt.format("%Y-%m-%d %H:%M"))
 }
 
 pub fn create_file(path: &Path) -> FileStatus {
-    if !(path.exists() && path.is_file()) {
+    if path.exists() && path.is_file() {
+        FileStatus::Exists
+    } else {
         if fs::File::create(path).is_err() {
             eprintln!("{:?} file creation failed. Exiting...", path.file_name());
             process::exit(1);
         }
-        return FileStatus::Created;
+
+        FileStatus::Created
     }
-    FileStatus::Exists
 }
 
 pub fn list_dir_contents(path: &Path) {
-    let paths = fs::read_dir(path).unwrap();
-
-    for path in paths {
+    for path in fs::read_dir(path).unwrap() {
         let file_name = path.unwrap().file_name();
         println!("{}", file_name.to_str().unwrap());
     }
