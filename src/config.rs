@@ -1,7 +1,6 @@
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::PathBuf;
-use std::process;
 
 use serde::{Deserialize, Serialize};
 use toml::Value;
@@ -15,19 +14,19 @@ pub struct Config {
     pub notes_parent_dir: PathBuf,
 }
 
-pub fn build_config(gen_paths: &GeneralPaths) -> Config {
-    let config_file_status = utils::create_file(&gen_paths.config_file);
-    let cache_file_status = utils::create_file(&gen_paths.cache_file);
+pub fn build_config(gen_paths: &GeneralPaths) -> anyhow::Result<Config> {
+    let config_file_status = utils::create_file(&gen_paths.config_file)?;
+    let cache_file_status = utils::create_file(&gen_paths.cache_file)?;
 
     if let FileStatus::Created = config_file_status {
         let config = Config {
             notes_parent_dir: PathBuf::from(&gen_paths.default_notes_parent_dir),
         };
 
-        write_config(gen_paths, &config);
-        cache::write_cache(gen_paths, &config);
+        write_config(gen_paths, &config)?;
+        cache::write_cache(gen_paths, &config)?;
 
-        config
+        Ok(config)
     } else if let FileStatus::Exists = cache_file_status {
         let config_file_stat = fs::metadata(&gen_paths.config_file).unwrap();
         let cache_file_stat = fs::metadata(&gen_paths.cache_file).unwrap();
@@ -54,14 +53,12 @@ pub fn parse_config_toml(gen_paths: &GeneralPaths, config_toml: Value) -> Config
     Config { notes_parent_dir }
 }
 
-pub fn read_config(gen_paths: &GeneralPaths) -> Value {
-    fs::read_to_string(&gen_paths.config_file)
-        .unwrap()
-        .parse::<toml::Value>()
-        .unwrap()
+pub fn read_config(gen_paths: &GeneralPaths) -> anyhow::Result<Value> {
+    let config = fs::read_to_string(&gen_paths.config_file)?.parse::<toml::Value>()?;
+    Ok(config)
 }
 
-fn write_config(gen_paths: &GeneralPaths, config: &Config) {
+fn write_config(gen_paths: &GeneralPaths, config: &Config) -> anyhow::Result<()> {
     let content = format!(
         r##"# Specify the absolute path of the notes parent directory.
 #
@@ -78,8 +75,7 @@ notes_parent_dir = {:?}
 
     let mut file = File::create(&gen_paths.config_file).unwrap();
 
-    if file.write_all(content.as_bytes()).is_err() {
-        eprintln!("Could not write to the config file. Exiting...");
-        process::exit(1);
-    }
+    file.write_all(content.as_bytes())?;
+
+    Ok(())
 }

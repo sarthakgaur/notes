@@ -1,9 +1,9 @@
+use anyhow::anyhow;
+use chrono::Datelike;
 use std::fs;
 use std::path::PathBuf;
 use std::process;
 use std::{convert::TryInto, path::Path};
-
-use chrono::Datelike;
 
 #[derive(Debug)]
 pub enum FileStatus {
@@ -11,28 +11,12 @@ pub enum FileStatus {
     Exists,
 }
 
-pub fn open_editor(editor_name: &str, file_path: &Path) -> process::ExitStatus {
-    process::Command::new(editor_name)
-        .arg(file_path)
-        .status()
-        .expect("Error occurred while opening the editor command.")
+pub fn open_editor(editor_name: &str, file_path: &Path) -> anyhow::Result<process::ExitStatus> {
+    Ok(process::Command::new(editor_name).arg(file_path).status()?)
 }
 
-pub fn get_home_dir() -> PathBuf {
-    match dirs::home_dir() {
-        Some(path) => path,
-        None => {
-            eprintln!("Could not get your home directory. Exiting...");
-            process::exit(1);
-        }
-    }
-}
-
-pub fn create_dir(path: &Path) {
-    if fs::create_dir_all(path).is_err() {
-        eprintln!("Could not create {:?} directory.", path.file_name());
-        process::exit(1);
-    }
+pub fn get_home_dir() -> anyhow::Result<PathBuf> {
+    dirs::home_dir().ok_or_else(|| anyhow!("Could not get your home directory."))
 }
 
 pub fn get_date_time_string() -> String {
@@ -52,22 +36,27 @@ pub fn get_date_time_string() -> String {
     format!("{}, {}", WEEKDAYS[day_num], dt.format("%Y-%m-%d %H:%M"))
 }
 
-pub fn create_file(path: &Path) -> FileStatus {
-    if path.exists() && path.is_file() {
+pub fn create_file(path: &Path) -> anyhow::Result<FileStatus> {
+    Ok(if path.exists() && path.is_file() {
         FileStatus::Exists
     } else {
-        if fs::File::create(path).is_err() {
-            eprintln!("{:?} file creation failed. Exiting...", path.file_name());
-            process::exit(1);
-        }
+        fs::File::create(path)?;
 
         FileStatus::Created
-    }
+    })
 }
 
-pub fn list_dir_contents(path: &Path) {
-    for path in fs::read_dir(path).unwrap() {
-        let file_name = path.unwrap().file_name();
-        println!("{}", file_name.to_str().unwrap());
+pub fn list_dir_contents(path: &Path) -> anyhow::Result<()> {
+    for path in fs::read_dir(path)? {
+        let file_name = path?.file_name();
+
+        println!(
+            "{}",
+            file_name
+                .to_str()
+                .ok_or_else(|| anyhow!("Non UTF-8 file name"))?
+        );
     }
+
+    Ok(())
 }

@@ -22,16 +22,16 @@ pub struct NotePaths {
     pub template_file: PathBuf,
 }
 
-pub fn build_gen_paths() -> GeneralPaths {
-    let home_dir = utils::get_home_dir();
-    GeneralPaths {
+pub fn build_gen_paths() -> anyhow::Result<GeneralPaths> {
+    let home_dir = utils::get_home_dir()?;
+    Ok(GeneralPaths {
         cache_dir: home_dir.join(".cache").join("notes"),
         cache_file: home_dir.join(".cache").join("notes").join("cache"),
         config_dir: home_dir.join(".config").join("notes"),
         config_file: home_dir.join(".config").join("notes").join("config.toml"),
         default_notes_parent_dir: home_dir.clone(),
         home_dir,
-    }
+    })
 }
 
 pub fn build_note_paths(request: &Request, config: &Config) -> NotePaths {
