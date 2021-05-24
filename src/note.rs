@@ -38,7 +38,7 @@ pub fn get_note_body(request: &Request, template_file_path: &PathBuf) -> String 
         note_body = get_stdin_note();
     }
 
-    return note_body;
+    return note_body.trim().to_owned();
 }
 
 fn get_file_note(request: &Request, template_file_path: &PathBuf) -> String {
@@ -56,8 +56,7 @@ fn get_file_note(request: &Request, template_file_path: &PathBuf) -> String {
     );
 
     if status.success() {
-        let mut buffer = fs::read_to_string(&temp_path).unwrap();
-        buffer.pop(); // To remove last new line.
+        let buffer = fs::read_to_string(&temp_path).unwrap();
         return buffer;
     } else {
         eprintln!("Child process failed. Exiting...");
@@ -72,6 +71,5 @@ fn get_stdin_note() -> String {
 
     let mut input = String::new();
     std::io::stdin().read_line(&mut input).unwrap();
-    input = input.trim().to_owned(); // To remove last new line.
     return input;
 }
