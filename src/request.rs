@@ -69,7 +69,7 @@ pub fn build_request(matches: &ArgMatches) -> Request {
 
     let note_source;
     let mut editor_name = None;
-    if let Some(_) = note_body {
+    if note_body.is_some() {
         note_source = NoteSource::CommandLine;
     } else if let Ok(editor) = env::var("EDITOR") {
         note_source = NoteSource::Editor;
@@ -82,7 +82,7 @@ pub fn build_request(matches: &ArgMatches) -> Request {
     let write_date = matches.is_present("date");
     let use_template = matches.is_present("template");
 
-    return Request {
+    Request {
         request_type,
         note_file_name,
         note_body,
@@ -91,7 +91,7 @@ pub fn build_request(matches: &ArgMatches) -> Request {
         write_date,
         template_file_name,
         use_template,
-    };
+    }
 }
 
 pub fn handle_request(request: Request, note_paths: &NotePaths) {

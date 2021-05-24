@@ -1,14 +1,17 @@
-use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
-use std::path::PathBuf;
+
 use std::process;
+use std::{
+    fs::{self, OpenOptions},
+    path::Path,
+};
 
 use tempfile::NamedTempFile;
 
 use crate::request::{NoteSource, Request};
 use crate::utils;
 
-pub fn create_note(write_date: bool, note_body: &String) -> String {
+pub fn create_note(write_date: bool, note_body: &str) -> String {
     if write_date {
         return format!("{}\n{}\n\n", utils::get_date_time_string(), note_body);
     } else {
@@ -16,18 +19,18 @@ pub fn create_note(write_date: bool, note_body: &String) -> String {
     }
 }
 
-pub fn write_note(path: &PathBuf, note: &String) {
+pub fn write_note(path: &Path, note: &str) {
     utils::create_file(path);
 
     let mut file = OpenOptions::new().append(true).open(path).unwrap();
 
-    if let Err(_) = file.write_all(note.as_bytes()) {
+    if file.write_all(note.as_bytes()).is_err() {
         eprintln!("Could not write to the file. Exiting...");
         process::exit(1);
     }
 }
 
-pub fn get_note_body(request: &Request, template_file_path: &PathBuf) -> String {
+pub fn get_note_body(request: &Request, template_file_path: &Path) -> String {
     let note_body;
 
     if let Some(v) = &request.note_body {
@@ -41,7 +44,7 @@ pub fn get_note_body(request: &Request, template_file_path: &PathBuf) -> String 
     return note_body.trim().to_owned();
 }
 
-fn get_file_note(request: &Request, template_file_path: &PathBuf) -> String {
+fn get_file_note(request: &Request, template_file_path: &Path) -> String {
     let mut file = NamedTempFile::new().unwrap();
 
     if request.use_template {
@@ -56,8 +59,7 @@ fn get_file_note(request: &Request, template_file_path: &PathBuf) -> String {
     );
 
     if status.success() {
-        let buffer = fs::read_to_string(&temp_path).unwrap();
-        return buffer;
+        fs::read_to_string(&temp_path).unwrap()
     } else {
         eprintln!("Child process failed. Exiting...");
         process::exit(1);
@@ -71,5 +73,5 @@ fn get_stdin_note() -> String {
 
     let mut input = String::new();
     std::io::stdin().read_line(&mut input).unwrap();
-    return input;
+    input
 }

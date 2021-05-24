@@ -1,7 +1,7 @@
-use std::convert::TryInto;
 use std::fs;
 use std::path::PathBuf;
 use std::process;
+use std::{convert::TryInto, path::Path};
 
 use chrono::Datelike;
 
@@ -11,13 +11,13 @@ pub enum FileStatus {
     Exists,
 }
 
-pub fn open_editor(editor_name: &String, file_path: &PathBuf) -> process::ExitStatus {
+pub fn open_editor(editor_name: &str, file_path: &Path) -> process::ExitStatus {
     let status = process::Command::new(editor_name)
         .arg(file_path)
         .status()
         .expect("Error occurred while opening the editor command.");
 
-    return status;
+    status
 }
 
 pub fn get_home_dir() -> PathBuf {
@@ -30,8 +30,8 @@ pub fn get_home_dir() -> PathBuf {
     }
 }
 
-pub fn create_dir(path: &PathBuf) {
-    if let Err(_) = fs::create_dir_all(path) {
+pub fn create_dir(path: &Path) {
+    if fs::create_dir_all(path).is_err() {
         eprintln!("Could not create {:?} directory.", path.file_name());
         process::exit(1);
     }
@@ -54,18 +54,18 @@ pub fn get_date_time_string() -> String {
     return format!("{}, {}", WEEKDAYS[day_num], dt.format("%Y-%m-%d %H:%M"));
 }
 
-pub fn create_file(path: &PathBuf) -> FileStatus {
+pub fn create_file(path: &Path) -> FileStatus {
     if !(path.exists() && path.is_file()) {
-        if let Err(_) = fs::File::create(path) {
+        if fs::File::create(path).is_err() {
             eprintln!("{:?} file creation failed. Exiting...", path.file_name());
             process::exit(1);
         }
         return FileStatus::Created;
     }
-    return FileStatus::Exists;
+    FileStatus::Exists
 }
 
-pub fn list_dir_contents(path: &PathBuf) {
+pub fn list_dir_contents(path: &Path) {
     let paths = fs::read_dir(path).unwrap();
 
     for path in paths {

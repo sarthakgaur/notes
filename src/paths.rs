@@ -30,14 +30,14 @@ pub fn build_gen_paths() -> GeneralPaths {
     let config_file = Path::new(&config_dir).join("config.toml");
     let cache_file = Path::new(&cache_dir).join("cache");
 
-    return GeneralPaths {
+    GeneralPaths {
         home_dir,
         config_dir,
         cache_dir,
         default_notes_parent_dir,
         config_file,
         cache_file,
-    };
+    }
 }
 
 pub fn build_note_paths(request: &Request, config: &Config) -> NotePaths {
@@ -46,10 +46,10 @@ pub fn build_note_paths(request: &Request, config: &Config) -> NotePaths {
     let note_file = Path::new(&notes_dir).join(&request.note_file_name);
     let template_file = Path::new(&templates_dir).join(&request.template_file_name);
 
-    return NotePaths {
+    NotePaths {
         notes_dir,
         templates_dir,
         note_file,
         template_file,
-    };
+    }
 }

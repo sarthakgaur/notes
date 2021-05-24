@@ -27,24 +27,22 @@ pub fn build_config(gen_paths: &GeneralPaths) -> Config {
 
         write_config(gen_paths, &config);
         cache::write_cache(gen_paths, &config)
-    } else {
-        if let FileStatus::Exists = cache_file_status {
-            let config_file_stat = fs::metadata(&gen_paths.config_file).unwrap();
-            let cache_file_stat = fs::metadata(&gen_paths.cache_file).unwrap();
-            let config_mod_time = config_file_stat.modified().unwrap().elapsed().unwrap();
-            let cache_mod_time = cache_file_stat.modified().unwrap().elapsed().unwrap();
+    } else if let FileStatus::Exists = cache_file_status {
+        let config_file_stat = fs::metadata(&gen_paths.config_file).unwrap();
+        let cache_file_stat = fs::metadata(&gen_paths.cache_file).unwrap();
+        let config_mod_time = config_file_stat.modified().unwrap().elapsed().unwrap();
+        let cache_mod_time = cache_file_stat.modified().unwrap().elapsed().unwrap();
 
-            if config_mod_time < cache_mod_time {
-                config = cache::update_cache(gen_paths);
-            } else {
-                config = cache::read_cache(&gen_paths);
-            }
-        } else {
+        if config_mod_time < cache_mod_time {
             config = cache::update_cache(gen_paths);
+        } else {
+            config = cache::read_cache(&gen_paths);
         }
+    } else {
+        config = cache::update_cache(gen_paths);
     }
 
-    return config;
+    config
 }
 
 pub fn parse_config_toml(gen_paths: &GeneralPaths, config_toml: Value) -> Config {
@@ -55,13 +53,12 @@ pub fn parse_config_toml(gen_paths: &GeneralPaths, config_toml: Value) -> Config
         notes_parent_dir = PathBuf::from(&gen_paths.default_notes_parent_dir);
     }
 
-    return Config { notes_parent_dir };
+    Config { notes_parent_dir }
 }
 
 pub fn read_config(gen_paths: &GeneralPaths) -> Value {
     let contents = fs::read_to_string(&gen_paths.config_file).unwrap();
-    let value = contents.parse::<toml::Value>().unwrap();
-    return value;
+    contents.parse::<toml::Value>().unwrap()
 }
 
 fn write_config(gen_paths: &GeneralPaths, config: &Config) {
@@ -83,7 +80,7 @@ fn write_config(gen_paths: &GeneralPaths, config: &Config) {
         .open(&gen_paths.config_file)
         .unwrap();
 
-    if let Err(_) = file.write_all(content.as_bytes()) {
+    if file.write_all(content.as_bytes()).is_err() {
         eprintln!("Could not write to the config file. Exiting...");
         process::exit(1);
     }

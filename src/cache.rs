@@ -9,7 +9,7 @@ pub fn read_cache(gen_paths: &GeneralPaths) -> Config {
     let contents = fs::read_to_string(&gen_paths.cache_file).unwrap();
     let bytes = contents.as_bytes();
     let config: Config = bincode::deserialize(bytes).unwrap();
-    return config;
+    config
 }
 
 pub fn write_cache(gen_paths: &GeneralPaths, config: &Config) {
@@ -21,7 +21,7 @@ pub fn write_cache(gen_paths: &GeneralPaths, config: &Config) {
         .open(&gen_paths.cache_file)
         .unwrap();
 
-    if let Err(_) = cache_file.write_all(&bytes) {
+    if cache_file.write_all(&bytes).is_err() {
         eprintln!("Could not write to the cache file. Exiting...");
         process::exit(1);
     }
@@ -31,5 +31,5 @@ pub fn update_cache(gen_paths: &GeneralPaths) -> Config {
     let config_toml = config::read_config(&gen_paths);
     let config = config::parse_config_toml(gen_paths, config_toml);
     write_cache(&gen_paths, &config);
-    return config;
+    config
 }
