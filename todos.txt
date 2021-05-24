@@ -9,3 +9,4 @@
 09. Add cache file. Done.
 10. Refactor the code. Done.
 11. Add README.md. Done.
+12. Check note is not an empty string.

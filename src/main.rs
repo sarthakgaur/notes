@@ -74,7 +74,7 @@ struct Config {
 
 fn main() {
     let matches = App::new("notes")
-        .version("0.1")
+        .version("0.2")
         .about("Make notes from command line")
         .arg(
             Arg::with_name("file")
@@ -335,7 +335,7 @@ fn get_note_body(request: &Request, template_file_path: &PathBuf) -> String {
 
 fn get_stdin_note() -> String {
     let mut stdout = io::stdout();
-    write!(&mut stdout, "Enter note: ");
+    write!(&mut stdout, "Enter note: ").unwrap();
     stdout.flush().unwrap();
 
     let mut input = String::new();
