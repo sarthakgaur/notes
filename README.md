@@ -43,7 +43,7 @@ Write notes from the command line.
 5. You can change the `notes` directory location by changing it in the config file.
 6. The config file's path is `~/.config/notes/config.toml`.
 
-## Config File
+## Configuration
 The config file is located at `~/.config/notes/config.toml`. It includes the following content:
 
     # Specify the absolute path of the notes parent directory.
