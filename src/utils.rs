@@ -32,7 +32,7 @@ pub fn get_home_dir() -> PathBuf {
 
 pub fn create_dir(path: &PathBuf) {
     if let Err(_) = fs::create_dir_all(path) {
-        eprintln!("Could note create {:?} directory.", path.file_name());
+        eprintln!("Could not create {:?} directory.", path.file_name());
         process::exit(1);
     }
 }
