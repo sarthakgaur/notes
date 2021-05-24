@@ -1,3 +1,4 @@
+use anyhow::Context;
 use fehler::throws;
 use std::fs::{self, File};
 use std::io::Write;
@@ -7,7 +8,8 @@ use crate::paths::GeneralPaths;
 
 #[throws(anyhow::Error)]
 pub fn read_cache(gen_paths: &GeneralPaths) -> Config {
-    let contents = fs::read_to_string(&gen_paths.cache_file)?;
+    let contents =
+        fs::read_to_string(&gen_paths.cache_file).context("Failed to read cache file")?;
 
     bincode::deserialize(contents.as_bytes())?
 }

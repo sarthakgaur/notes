@@ -1,7 +1,6 @@
 use std::env;
-use std::process;
 
-use anyhow::bail;
+use anyhow::{bail, Context};
 use clap::ArgMatches;
 use fehler::throws;
 
@@ -100,11 +99,11 @@ impl Request {
     #[throws(anyhow::Error)]
     fn handle_write_request(&self, note_paths: &NotePaths) {
         if self.use_template && self.editor_name.is_none() {
-            eprintln!("$EDITOR environment variable is required for using templates. Exiting...");
-            process::exit(1);
+            bail!("$EDITOR environment variable is required for using templates.");
         }
 
-        let note_body = note::get_note_body(self, &note_paths.template_file)?;
+        let note_body = note::get_note_body(self, &note_paths.template_file)
+            .context("Failed to get note body")?;
         let note = note::create_note(self.write_date, &note_body);
         note::write_note(&note_paths.note_file, &note)?;
     }

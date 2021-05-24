@@ -5,7 +5,7 @@ use std::{
     path::Path,
 };
 
-use anyhow::bail;
+use anyhow::{bail, Context};
 use fehler::throws;
 use tempfile::NamedTempFile;
 
@@ -24,7 +24,7 @@ pub fn create_note(write_date: bool, note_body: &str) -> String {
 pub fn write_note(path: &Path, note: &str) {
     utils::create_file(path)?;
 
-    let mut file = OpenOptions::new().append(true).open(path).unwrap();
+    let mut file = OpenOptions::new().append(true).open(path)?;
 
     file.write_all(note.as_bytes())?;
 }
@@ -36,7 +36,7 @@ pub fn get_note_body(request: &Request, template_file_path: &Path) -> String {
     } else if let NoteSource::Editor = request.note_source {
         get_file_note(request, template_file_path)?
     } else {
-        get_stdin_note()
+        get_stdin_note()?
     };
 
     note_body.trim().to_owned()
@@ -44,7 +44,7 @@ pub fn get_note_body(request: &Request, template_file_path: &Path) -> String {
 
 #[throws(anyhow::Error)]
 fn get_file_note(request: &Request, template_file_path: &Path) -> String {
-    let mut file = NamedTempFile::new()?;
+    let mut file = NamedTempFile::new().context("Failed to create Temp file")?;
 
     if request.use_template {
         let template_contents = fs::read_to_string(template_file_path)?;
@@ -61,16 +61,17 @@ fn get_file_note(request: &Request, template_file_path: &Path) -> String {
     if status.success() {
         fs::read_to_string(&temp_path)?
     } else {
-        bail!("Child process failed. Exiting...")
+        bail!("Child process failed")
     }
 }
 
+#[throws(std::io::Error)]
 fn get_stdin_note() -> String {
     let mut stdout = io::stdout();
-    write!(&mut stdout, "Enter note: ").unwrap();
-    stdout.flush().unwrap();
+    write!(&mut stdout, "Enter note: ")?;
+    stdout.flush()?;
 
     let mut input = String::new();
-    std::io::stdin().read_line(&mut input).unwrap();
+    std::io::stdin().read_line(&mut input)?;
     input
 }

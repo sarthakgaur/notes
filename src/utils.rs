@@ -1,4 +1,4 @@
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 use chrono::Datelike;
 use fehler::throws;
 use std::fs;
@@ -14,7 +14,10 @@ pub enum FileStatus {
 
 #[throws(anyhow::Error)]
 pub fn open_editor(editor_name: &str, file_path: &Path) -> process::ExitStatus {
-    process::Command::new(editor_name).arg(file_path).status()?
+    process::Command::new(editor_name)
+        .arg(file_path)
+        .status()
+        .context("Failed to open editor")?
 }
 
 #[throws(anyhow::Error)]
@@ -44,7 +47,7 @@ pub fn create_file(path: &Path) -> FileStatus {
     if path.exists() && path.is_file() {
         FileStatus::Exists
     } else {
-        fs::File::create(path)?;
+        fs::File::create(path).with_context(|| format!("Failed to create file at {:?}", path))?;
 
         FileStatus::Created
     }
@@ -52,7 +55,10 @@ pub fn create_file(path: &Path) -> FileStatus {
 
 #[throws(anyhow::Error)]
 pub fn list_dir_contents(path: &Path) {
-    for path in fs::read_dir(path)? {
+    let paths =
+        fs::read_dir(path).with_context(|| format!("Failed to read directory at {:?}", path))?;
+
+    for path in paths {
         let file_name = path?.file_name();
 
         println!(
