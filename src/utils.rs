@@ -1,9 +1,10 @@
-use std::convert::TryInto;
+use anyhow::{anyhow, Context};
+use chrono::Datelike;
+use fehler::throws;
 use std::fs;
 use std::path::PathBuf;
 use std::process;
-
-use chrono::Datelike;
+use std::{convert::TryInto, path::Path};
 
 #[derive(Debug)]
 pub enum FileStatus {
@@ -11,30 +12,17 @@ pub enum FileStatus {
     Exists,
 }
 
-pub fn open_editor(editor_name: &String, file_path: &PathBuf) -> process::ExitStatus {
-    let status = process::Command::new(editor_name)
+#[throws(anyhow::Error)]
+pub fn open_editor(editor_name: &str, file_path: &Path) -> process::ExitStatus {
+    process::Command::new(editor_name)
         .arg(file_path)
         .status()
-        .expect("Error occurred while opening the editor command.");
-
-    return status;
+        .context("Failed to open editor")?
 }
 
+#[throws(anyhow::Error)]
 pub fn get_home_dir() -> PathBuf {
-    match dirs::home_dir() {
-        Some(path) => path,
-        None => {
-            eprintln!("Could not get your home directory. Exiting...");
-            process::exit(1);
-        }
-    }
-}
-
-pub fn create_dir(path: &PathBuf) {
-    if let Err(_) = fs::create_dir_all(path) {
-        eprintln!("Could not create {:?} directory.", path.file_name());
-        process::exit(1);
-    }
+    dirs::home_dir().ok_or_else(|| anyhow!("Could not get your home directory."))?
 }
 
 pub fn get_date_time_string() -> String {
@@ -51,25 +39,33 @@ pub fn get_date_time_string() -> String {
     let dt = chrono::prelude::Local::now();
     let day_num: usize = dt.weekday().num_days_from_monday().try_into().unwrap();
 
-    return format!("{}, {}", WEEKDAYS[day_num], dt.format("%Y-%m-%d %H:%M"));
+    format!("{}, {}", WEEKDAYS[day_num], dt.format("%Y-%m-%d %H:%M"))
 }
 
-pub fn create_file(path: &PathBuf) -> FileStatus {
-    if !(path.exists() && path.is_file()) {
-        if let Err(_) = fs::File::create(path) {
-            eprintln!("{:?} file creation failed. Exiting...", path.file_name());
-            process::exit(1);
-        }
-        return FileStatus::Created;
+#[throws(anyhow::Error)]
+pub fn create_file(path: &Path) -> FileStatus {
+    if path.exists() && path.is_file() {
+        FileStatus::Exists
+    } else {
+        fs::File::create(path).with_context(|| format!("Failed to create file at {:?}", path))?;
+
+        FileStatus::Created
     }
-    return FileStatus::Exists;
 }
 
-pub fn list_dir_contents(path: &PathBuf) {
-    let paths = fs::read_dir(path).unwrap();
+#[throws(anyhow::Error)]
+pub fn list_dir_contents(path: &Path) {
+    let paths =
+        fs::read_dir(path).with_context(|| format!("Failed to read directory at {:?}", path))?;
 
     for path in paths {
-        let file_name = path.unwrap().file_name();
-        println!("{}", file_name.to_str().unwrap());
+        let file_name = path?.file_name();
+
+        println!(
+            "{}",
+            file_name
+                .to_str()
+                .ok_or_else(|| anyhow!("Non UTF-8 file name"))?
+        );
     }
 }
