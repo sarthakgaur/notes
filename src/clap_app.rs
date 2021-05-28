@@ -23,6 +23,8 @@ pub fn app() -> App<'static, 'static> {
             Arg::with_name("edit")
                 .short("e")
                 .long("edit")
+                .value_name("FILE")
+                .takes_value(true)
                 .conflicts_with("note")
                 .help("Open the note file for editing."),
         )

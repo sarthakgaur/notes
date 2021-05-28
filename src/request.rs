@@ -58,6 +58,12 @@ impl Request {
             .unwrap_or("template.txt")
             .to_owned();
 
+        let note_file_name = matches
+            .value_of("files")
+            .or_else(|| matches.value_of("edit"))
+            .unwrap_or("notes.txt")
+            .to_owned();
+
         let mut editor_name = None;
 
         let note_source = if note_body.is_some() {
@@ -69,7 +75,6 @@ impl Request {
             NoteSource::StandardInput
         };
 
-        let note_file_name = matches.value_of("file").unwrap_or("notes.txt").to_owned();
         let write_date = matches.is_present("date");
         let use_template = matches.is_present("template");
 
