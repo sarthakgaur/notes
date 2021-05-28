@@ -26,7 +26,7 @@ pub fn app() -> App<'static, 'static> {
                 .value_name("FILE")
                 .takes_value(true)
                 .conflicts_with("note")
-                .help("Open the note file for editing."),
+                .help("Open the note file for editing. Defaults to notes.txt"),
         )
         .arg(
             Arg::with_name("list")
