@@ -59,7 +59,7 @@ impl Request {
             .to_owned();
 
         let note_file_name = matches
-            .value_of("files")
+            .value_of("file")
             .or_else(|| matches.value_of("edit"))
             .unwrap_or("notes.txt")
             .to_owned();
