@@ -16,33 +16,35 @@ pub struct Config {
     pub notes_parent_dir: PathBuf,
 }
 
-#[throws(anyhow::Error)]
-pub fn build_config(gen_paths: &GeneralPaths) -> Config {
-    let config_file_status = utils::create_file(&gen_paths.config_file)?;
-    let cache_file_status = utils::create_file(&gen_paths.cache_file)?;
+impl Config {
+    #[throws(anyhow::Error)]
+    pub fn new(gen_paths: &GeneralPaths) -> Config {
+        let config_file_status = utils::create_file(&gen_paths.config_file)?;
+        let cache_file_status = utils::create_file(&gen_paths.cache_file)?;
 
-    if let FileStatus::Created = config_file_status {
-        let config = Config {
-            notes_parent_dir: PathBuf::from(&gen_paths.default_notes_parent_dir),
-        };
+        if let FileStatus::Created = config_file_status {
+            let config = Config {
+                notes_parent_dir: PathBuf::from(&gen_paths.default_notes_parent_dir),
+            };
 
-        write_config(gen_paths, &config)?;
-        cache::write_cache(gen_paths, &config)?;
+            write_config(gen_paths, &config)?;
+            cache::write_cache(gen_paths, &config)?;
 
-        config
-    } else if let FileStatus::Exists = cache_file_status {
-        let config_file_stat = fs::metadata(&gen_paths.config_file)?;
-        let cache_file_stat = fs::metadata(&gen_paths.cache_file)?;
-        let config_mod_time = config_file_stat.modified()?.elapsed()?;
-        let cache_mod_time = cache_file_stat.modified()?.elapsed()?;
+            config
+        } else if let FileStatus::Exists = cache_file_status {
+            let config_file_stat = fs::metadata(&gen_paths.config_file)?;
+            let cache_file_stat = fs::metadata(&gen_paths.cache_file)?;
+            let config_mod_etime = config_file_stat.modified()?.elapsed()?;
+            let cache_mod_etime = cache_file_stat.modified()?.elapsed()?;
 
-        if config_mod_time < cache_mod_time {
-            cache::update_cache(gen_paths)?
+            if config_mod_etime < cache_mod_etime {
+                cache::update_cache(gen_paths)?
+            } else {
+                cache::read_cache(&gen_paths)?
+            }
         } else {
-            cache::read_cache(&gen_paths)?
+            cache::update_cache(gen_paths)?
         }
-    } else {
-        cache::update_cache(gen_paths)?
     }
 }
 
@@ -78,6 +80,5 @@ notes_parent_dir = {:?}
     );
 
     let mut file = File::create(&gen_paths.config_file).context("Failed to create config file")?;
-
     file.write_all(content.as_bytes())?;
 }

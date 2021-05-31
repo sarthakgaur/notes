@@ -1,8 +1,9 @@
+use fehler::throws;
+use std::path::PathBuf;
+
 use crate::config::Config;
 use crate::request::Request;
 use crate::utils;
-use fehler::throws;
-use std::path::PathBuf;
 
 #[derive(Debug)]
 pub struct GeneralPaths {
@@ -14,6 +15,22 @@ pub struct GeneralPaths {
     pub cache_file: PathBuf,
 }
 
+impl GeneralPaths {
+    #[throws(anyhow::Error)]
+    pub fn new() -> GeneralPaths {
+        let home_dir = utils::get_home_dir()?;
+
+        GeneralPaths {
+            cache_dir: home_dir.join(".cache").join("notes"),
+            cache_file: home_dir.join(".cache").join("notes").join("cache"),
+            config_dir: home_dir.join(".config").join("notes"),
+            config_file: home_dir.join(".config").join("notes").join("config.toml"),
+            default_notes_parent_dir: home_dir.clone(),
+            home_dir,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct NotePaths {
     pub notes_dir: PathBuf,
@@ -22,27 +39,17 @@ pub struct NotePaths {
     pub template_file: PathBuf,
 }
 
-#[throws(anyhow::Error)]
-pub fn build_gen_paths() -> GeneralPaths {
-    let home_dir = utils::get_home_dir()?;
-    GeneralPaths {
-        cache_dir: home_dir.join(".cache").join("notes"),
-        cache_file: home_dir.join(".cache").join("notes").join("cache"),
-        config_dir: home_dir.join(".config").join("notes"),
-        config_file: home_dir.join(".config").join("notes").join("config.toml"),
-        default_notes_parent_dir: home_dir.clone(),
-        home_dir,
-    }
-}
+impl NotePaths {
+    pub fn new(request: &Request, config: &Config) -> NotePaths {
+        let notes_dir = config.notes_parent_dir.join("notes");
 
-pub fn build_note_paths(request: &Request, config: &Config) -> NotePaths {
-    let notes_dir = config.notes_parent_dir.join("notes");
-    NotePaths {
-        note_file: notes_dir.join(&request.note_file_name),
-        templates_dir: notes_dir.join("templates"),
-        template_file: notes_dir
-            .join("templates")
-            .join(&request.template_file_name),
-        notes_dir,
+        NotePaths {
+            note_file: notes_dir.join(&request.note_file_name),
+            templates_dir: notes_dir.join("templates"),
+            template_file: notes_dir
+                .join("templates")
+                .join(&request.template_file_name),
+            notes_dir,
+        }
     }
 }
