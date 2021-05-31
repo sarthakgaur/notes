@@ -53,7 +53,6 @@ pub fn create_file(path: &Path) -> FileStatus {
         FileStatus::Exists
     } else {
         fs::File::create(path).with_context(|| format!("Failed to create file at {:?}", path))?;
-
         FileStatus::Created
     }
 }

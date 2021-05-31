@@ -17,9 +17,7 @@ pub fn read_cache(gen_paths: &GeneralPaths) -> Config {
 #[throws(anyhow::Error)]
 pub fn write_cache(gen_paths: &GeneralPaths, config: &Config) {
     let bytes = bincode::serialize(config)?;
-
     let mut cache_file = File::create(&gen_paths.cache_file)?;
-
     cache_file.write_all(&bytes)?;
 }
 

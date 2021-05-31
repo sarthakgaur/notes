@@ -93,16 +93,16 @@ impl Request {
     #[throws(anyhow::Error)]
     pub fn handle(self, note_paths: &NotePaths) {
         match self.request_type {
-            RequestType::WriteNote => self.handle_write_request(&note_paths)?,
-            RequestType::EditNote => self.handle_edit_request(&note_paths)?,
-            RequestType::ListNotes => self.handle_list_request(&note_paths)?,
-            RequestType::SaveTemplate => self.handle_save_request(&note_paths)?,
+            RequestType::WriteNote => self.handle_write_note(&note_paths)?,
+            RequestType::EditNote => self.handle_edit_note(&note_paths)?,
+            RequestType::ListNotes => self.handle_list_notes(&note_paths)?,
+            RequestType::SaveTemplate => self.handle_save_template(&note_paths)?,
             RequestType::ListTemplates => self.handle_list_templates(note_paths)?,
         }
     }
 
     #[throws(anyhow::Error)]
-    fn handle_write_request(&self, note_paths: &NotePaths) {
+    fn handle_write_note(&self, note_paths: &NotePaths) {
         if self.use_template && self.editor_name.is_none() {
             bail!("$EDITOR environment variable is required for using templates.")
         }
@@ -114,7 +114,7 @@ impl Request {
     }
 
     #[throws(anyhow::Error)]
-    fn handle_edit_request(&self, note_paths: &NotePaths) {
+    fn handle_edit_note(&self, note_paths: &NotePaths) {
         if let Some(editor_name) = &self.editor_name {
             utils::open_editor(editor_name, &note_paths.note_file)?;
         } else {
@@ -123,12 +123,12 @@ impl Request {
     }
 
     #[throws(anyhow::Error)]
-    fn handle_list_request(&self, note_paths: &NotePaths) {
+    fn handle_list_notes(&self, note_paths: &NotePaths) {
         utils::list_dir_contents(&note_paths.notes_dir)?;
     }
 
     #[throws(anyhow::Error)]
-    fn handle_save_request(&self, note_paths: &NotePaths) {
+    fn handle_save_template(&self, note_paths: &NotePaths) {
         if let Some(editor) = &self.editor_name {
             utils::create_file(&note_paths.template_file)?;
             utils::open_editor(editor, &note_paths.template_file)?;
