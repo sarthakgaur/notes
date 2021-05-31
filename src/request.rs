@@ -104,7 +104,7 @@ impl Request {
     #[throws(anyhow::Error)]
     fn handle_write_request(&self, note_paths: &NotePaths) {
         if self.use_template && self.editor_name.is_none() {
-            bail!("$EDITOR environment variable is required for using templates.");
+            bail!("$EDITOR environment variable is required for using templates.")
         }
 
         let note_body = note::get_note_body(self, &note_paths.template_file)
@@ -116,12 +116,9 @@ impl Request {
     #[throws(anyhow::Error)]
     fn handle_edit_request(&self, note_paths: &NotePaths) {
         if let Some(editor_name) = &self.editor_name {
-            let status = utils::open_editor(editor_name, &note_paths.note_file)?;
-            if !status.success() {
-                bail!("Child process failed.")
-            }
+            utils::open_editor(editor_name, &note_paths.note_file)?;
         } else {
-            bail!("Child process failed.")
+            bail!("$EDITOR environment variable is required for editing.")
         }
     }
 
@@ -136,7 +133,7 @@ impl Request {
             utils::create_file(&note_paths.template_file)?;
             utils::open_editor(editor, &note_paths.template_file)?;
         } else {
-            bail!("$EDITOR env var is required for saving templates")
+            bail!("$EDITOR environment variable is required for saving templates.")
         }
     }
 

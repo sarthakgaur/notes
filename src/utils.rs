@@ -1,10 +1,11 @@
-use anyhow::{anyhow, Context};
-use chrono::Datelike;
-use fehler::throws;
 use std::fs;
 use std::path::PathBuf;
 use std::process;
 use std::{convert::TryInto, path::Path};
+
+use anyhow::{anyhow, bail, Context};
+use chrono::Datelike;
+use fehler::throws;
 
 #[derive(Debug)]
 pub enum FileStatus {
@@ -13,11 +14,15 @@ pub enum FileStatus {
 }
 
 #[throws(anyhow::Error)]
-pub fn open_editor(editor_name: &str, file_path: &Path) -> process::ExitStatus {
-    process::Command::new(editor_name)
+pub fn open_editor(editor_name: &str, file_path: &Path) {
+    let status = process::Command::new(editor_name)
         .arg(file_path)
         .status()
-        .context("Failed to open editor")?
+        .context("Failed to open editor.")?;
+
+    if !status.success() {
+        bail!("Editor process failed.")
+    }
 }
 
 #[throws(anyhow::Error)]
